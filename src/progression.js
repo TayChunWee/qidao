@@ -1,0 +1,60 @@
+// 繁荣度与小岛等级。繁荣度 = 全岛居民的评价之和（勉强 1、满意 2、惊喜 3），实现一个"新想法"再加 1。
+// 等级只升不降：升级解锁新模块、提高居民上限，有几级还会让小岛长出新的陆地。
+import { NAMES } from './config.js';
+
+// need：升到这一级需要的繁荣度；cap：居民上限；stage：小岛扩张到第几阶段；unlock：这一级解锁的模块
+export const LEVELS = [
+  { need: 0, cap: 3, unlock: ['room', 'balcony', 'road', 'garden', 'tree'] },
+  { need: 4, cap: 4, unlock: ['lamp', 'shop'] },
+  { need: 8, cap: 5, unlock: ['dock', 'well'] },
+  { need: 10, cap: 7, stage: 1, unlock: ['tower', 'field'] },
+  { need: 15, cap: 9, unlock: ['workshop', 'windmill'] },
+  { need: 20, cap: 12, stage: 2, unlock: ['greenhouse', 'pavilion'] },
+  { need: 27, cap: 14, unlock: ['market', 'fountain'] },
+  { need: 33, cap: 17, stage: 3, unlock: ['lighthouse'] },
+  { need: 41, cap: 20, unlock: [] },
+  { need: 50, cap: 20, final: true, unlock: [] },
+];
+export const MAX_LV = LEVELS.length - 1;
+
+const STAGE_TEXT = ['', '小岛向东长出一片新陆地', '小岛向北长出一片新陆地', '小岛向西、向南长出一大片新陆地'];
+
+export function prosperityOf(results) {
+  let p = 0;
+  for (const r of results) p += r.tier + (r.tier >= 1 && r.bonus && r.bonus.done ? 1 : 0);
+  return p;
+}
+
+export function levelFor(p) {
+  let lv = 0;
+  while (lv < MAX_LV && p >= LEVELS[lv + 1].need) lv++;
+  return lv;
+}
+
+export function stageFor(lv) {
+  let s = 0;
+  for (let i = 0; i <= lv; i++) if (LEVELS[i].stage) s = LEVELS[i].stage;
+  return s;
+}
+
+export function unlockedAt(lv) {
+  const set = new Set();
+  for (let i = 0; i <= lv; i++) for (const id of LEVELS[i].unlock) set.add(id);
+  return set;
+}
+
+// 某个模块在哪一级解锁
+export function unlockLevel(id) {
+  return LEVELS.findIndex((l) => l.unlock.includes(id));
+}
+
+// 升到 lv 级带来了什么，分行描述（升级提示和"下一级"预告都用它）
+export function rewardsOf(lv) {
+  const L = LEVELS[lv];
+  const out = [];
+  if (L.final) return ['大家都住得很舒心', '接下来随你喜欢'];
+  if (L.stage) out.push(STAGE_TEXT[L.stage]);
+  if (L.unlock.length) out.push(`新模块：${L.unlock.map((id) => NAMES[id]).join('、')}`);
+  if (lv > 0 && L.cap > LEVELS[lv - 1].cap) out.push(`能住下 ${L.cap} 位居民`);
+  return out;
+}

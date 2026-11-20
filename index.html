@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>栖岛</title>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+
+<div id="ui">
+  <section id="wishes"></section>
+
+  <div class="panel" id="prosper" title="繁荣度：全岛居民住得越满意，繁荣度越高">
+    <div class="pr-row">
+      <span class="pr-lv" id="pr-lv">小岛 1 级</span>
+      <span class="pr-bar"><i id="pr-fill"></i></span>
+      <span class="pr-num" id="pr-num">繁荣度 0 / 3</span>
+      <span class="pr-delta" id="pr-delta"></span>
+    </div>
+    <div class="pr-next" id="pr-next"></div>
+  </div>
+
+  <section id="topbar">
+    <div class="panel clock" id="clock">
+      <span class="clock-icon" id="clock-icon"></span>
+      <span class="clock-text" id="clock-text">上午 8:00</span>
+    </div>
+    <div class="panel compass" id="compass" title="指南针：太阳从东边升起，在西边落下">
+      <div class="dial" id="dial">
+        <span class="n">北</span><span class="e">东</span><span class="s">南</span><span class="w">西</span>
+        <i class="sun-dot" id="sun-dot"></i>
+      </div>
+    </div>
+    <div class="panel pill">
+      <button class="icon-btn" id="cam-left" title="向左转动镜头（Q）"></button>
+      <button class="icon-btn" id="cam-right" title="向右转动镜头（E）"></button>
+      <span class="sep"></span>
+      <button class="icon-btn" id="btn-help" title="操作说明"></button>
+      <button class="icon-btn" id="btn-settings" title="设置"></button>
+    </div>
+  </section>
+
+  <div class="panel" id="settings" hidden>
+    <label><span class="s-icon" id="ico-music"></span><span>音乐</span><input type="range" id="vol-music" min="0" max="100" value="70"></label>
+    <label><span class="s-icon" id="ico-sfx"></span><span>音效</span><input type="range" id="vol-sfx" min="0" max="100" value="80"></label>
+    <div class="s-row"><span class="s-icon" id="ico-fps"></span><span>帧率</span><div class="seg" id="fps-seg"></div></div>
+    <div class="s-note" id="fps-note" hidden></div>
+    <label class="s-check"><input type="checkbox" id="show-fps"><span>在角落显示帧率</span></label>
+    <button class="text-btn" id="btn-reset">重新开始</button>
+  </div>
+
+  <div id="bubbles"></div>
+  <div id="hint"></div>
+  <div id="toast"></div>
+  <div id="fps" hidden></div>
+  <div class="panel" id="tooltip"></div>
+  <div class="panel" id="tutorial" hidden></div>
+  <div id="levelup"></div>
+
+  <section id="toolbar-wrap">
+    <div id="tabs"></div>
+    <div class="panel" id="toolbar"></div>
+  </section>
+</div>
+
+<div id="start">
+  <div class="start-card">
+    <h1>栖岛</h1>
+    <p class="sub">一座慢慢盖起来的小岛</p>
+    <button id="btn-start">开始建造</button>
+    <p class="tip">建议打开声音</p>
+  </div>
+</div>
+
+<div id="fatal" hidden></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
