@@ -4,6 +4,7 @@ import { LEVELS, unlockLevel } from './progression.js';
 import { FPS_CHOICES } from './perf.js';
 import { TRACKS } from './music.js';
 import { t, nameOf, LANGS, getLang } from './i18n.js';
+import { feedbackOn, cooling, KINDS, MAX_LEN, MIN_LEN } from './feedback.js';
 
 const svg = (inner) => `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
 const ICON = {
@@ -65,6 +66,9 @@ export class UI {
     document.title = t('title');
     for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
     for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
+    for (const el of document.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
+    for (const b of $('#fb-kind').children) b.textContent = t(`fb.kind.${b.dataset.kind}`);
+    this.setFeedbackMsg();
     for (const [id, el] of this.tabEls) el.querySelector('span').textContent = t(`tab.${id}`);
     this.tabTip.innerHTML = t('tab.tip');
     for (const [id, name] of this.toolNames) this.toolEls.get(id).querySelector('.name').textContent = name();
@@ -289,6 +293,7 @@ export class UI {
         }, 3100);
       }
     });
+    this.buildFeedback(panel);
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
     this.dial = $('#dial');
@@ -546,6 +551,83 @@ export class UI {
     this.hint.classList.toggle('bad', !!bad);
     this.hint.classList.add('show');
     this.hint.style.transform = `translate(${x + 18}px, ${y + 20}px)`;
+  }
+
+  // ---------- 反馈与建议 ----------
+
+  buildFeedback(settingsPanel) {
+    const box = $('#feedback');
+    const text = $('#fb-text');
+    const contact = $('#fb-contact');
+    const send = $('#fb-send');
+    const kinds = $('#fb-kind');
+    this.fbMsg = $('#fb-msg');
+    let kind = ''; // 一开始哪类都不选：要玩家自己点一下，寄来的信标题里的分类才可信
+    let busy = false;
+    text.maxLength = MAX_LEN;
+    kinds.innerHTML = KINDS.map((k) => `<button data-kind="${k}"></button>`).join('');
+    const pick = (k) => {
+      kind = k;
+      for (const b of kinds.children) b.classList.toggle('on', b.dataset.kind === k);
+      kinds.classList.remove('ask');
+    };
+    kinds.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      this.h.clickSound();
+      pick(b.dataset.kind);
+      this.setFeedbackMsg('');
+      text.focus();
+    });
+    const close = () => {
+      box.hidden = true;
+      this.setFeedbackMsg('');
+    };
+    // 没配收件钥匙的版本不出现入口
+    const open = $('#btn-feedback');
+    open.hidden = !feedbackOn();
+    open.addEventListener('click', () => {
+      this.h.clickSound();
+      settingsPanel.hidden = true;
+      box.hidden = false;
+      if (kind) text.focus();
+    });
+    $('#fb-cancel').addEventListener('click', close);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+    text.addEventListener('input', () => this.setFeedbackMsg(''));
+    send.addEventListener('click', async () => {
+      if (busy) return;
+      if (!kind) {
+        kinds.classList.add('ask');
+        return this.setFeedbackMsg('fb.pick', true);
+      }
+      const body = text.value.trim();
+      if (body.length < MIN_LEN) return this.setFeedbackMsg('fb.short', true);
+      if (cooling()) return this.setFeedbackMsg('fb.wait', true);
+      busy = true;
+      send.disabled = true;
+      this.setFeedbackMsg('fb.sending');
+      const ok = await this.h.sendFeedback({ kind, text: body, contact: contact.value.trim() });
+      busy = false;
+      send.disabled = false;
+      if (ok) {
+        text.value = '';
+        pick('');
+        close();
+        this.toast(t('fb.sent'), 2.6);
+      } else this.setFeedbackMsg('fb.fail', true);
+    });
+  }
+
+  // 面板底下那行小字。记的是文字的键，换语言时能跟着换
+  setFeedbackMsg(key, bad = false) {
+    if (!this.fbMsg) return;
+    if (key !== undefined) this.fbMsgKey = [key, bad];
+    const [k, isBad] = this.fbMsgKey || ['', false];
+    this.fbMsg.textContent = k ? t(k) : '';
+    this.fbMsg.classList.toggle('bad', isBad);
   }
 
   toast(text, seconds = 1.8) {

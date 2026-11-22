@@ -9,6 +9,7 @@ import { thumbParts } from './viewmodel.js';
 import { Resident, arrivalCell, walkable } from './residents.js';
 import { UI } from './ui.js';
 import { TRACKS } from './music.js';
+import { sendFeedback } from './feedback.js';
 
 const SAVE_KEY = 'qidao-save-v2';
 const SETTINGS_KEY = 'qidao-settings-v1';
@@ -125,6 +126,7 @@ export class Game {
         this.saveSettings();
       },
       reset: () => this.reset(),
+      sendFeedback: (data) => sendFeedback({ ...data, info: this.feedbackInfo() }),
       focusResident: (id) => this.focusResident(id),
       hoverSound: () => this.audio.hover(),
       clickSound: () => this.audio.click(),
@@ -231,6 +233,17 @@ export class Game {
   queueSave() {
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.save(), 400);
+  }
+
+  // 随反馈一起寄出的几行情况：玩家说"卡""放不了"的时候，不用再回头问他用的什么浏览器、玩到哪了
+  feedbackInfo() {
+    return [
+      `语言 ${getLang()}`,
+      `小岛 ${this.level + 1} 级，繁荣度 ${this.prosperity}，建造规模 ${this.world.count()}`,
+      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}`,
+      `窗口 ${window.innerWidth}×${window.innerHeight}（像素比 ${window.devicePixelRatio}）`,
+      navigator.userAgent,
+    ].join('\n');
   }
 
   saveSettings() {
@@ -993,7 +1006,8 @@ export class Game {
     );
 
     window.addEventListener('keydown', (e) => {
-      if (!this.started || e.target.tagName === 'INPUT') return;
+      // 在输入框里打字的时候，不当成游戏的快捷键
+      if (!this.started || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const k = e.key.toLowerCase();
       // 数字键选的是当前这一页里的模块
       const mod = MODULES.find((m) => m.tab === this.tab && m.key === k);

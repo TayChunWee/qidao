@@ -55,6 +55,7 @@
     <div class="s-note" id="fps-note" hidden></div>
     <label class="s-check"><input type="checkbox" id="show-fps"><span data-i18n="set.showFps"></span></label>
     <div class="s-row"><span class="s-icon" id="ico-lang"></span><span data-i18n="set.lang"></span><select id="lang"></select></div>
+    <button class="text-btn plain" id="btn-feedback" data-i18n="set.feedback" hidden></button>
     <button class="text-btn" id="btn-reset"></button>
   </div>
 
@@ -64,6 +65,14 @@
   <div id="fps" hidden></div>
   <div class="panel" id="tooltip"></div>
   <div class="panel" id="tutorial" hidden></div>
+  <div class="panel" id="feedback" hidden>
+    <h3 data-i18n="fb.title"></h3>
+    <div class="seg" id="fb-kind"></div>
+    <textarea id="fb-text" rows="5" data-i18n-ph="fb.text"></textarea>
+    <input type="email" id="fb-contact" maxlength="120" autocomplete="email" data-i18n-ph="fb.contact">
+    <p class="s-note" data-i18n="fb.note"></p>
+    <div class="tut-foot"><span class="fb-msg" id="fb-msg"></span><button class="tut-skip" id="fb-cancel" data-i18n="fb.cancel"></button><button class="tut-next" id="fb-send" data-i18n="fb.send"></button></div>
+  </div>
   <div id="levelup"></div>
 
   <section id="toolbar-wrap">
