@@ -1,5 +1,5 @@
 // 界面层：全部是叠在画布上的普通网页元素。
-import { MODULES, TABS } from './config.js';
+import { MODULES, TABS, VERSION, AUTHOR } from './config.js';
 import { LEVELS, unlockLevel } from './progression.js';
 import { FPS_CHOICES } from './perf.js';
 import { TRACKS } from './music.js';
@@ -69,6 +69,7 @@ export class UI {
     for (const el of document.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
     for (const b of $('#fb-kind').children) b.textContent = t(`fb.kind.${b.dataset.kind}`);
     this.setFeedbackMsg();
+    this.renderCredits();
     for (const [id, el] of this.tabEls) el.querySelector('span').textContent = t(`tab.${id}`);
     this.tabTip.innerHTML = t('tab.tip');
     for (const [id, name] of this.toolNames) this.toolEls.get(id).querySelector('.name').textContent = name();
@@ -294,6 +295,7 @@ export class UI {
       }
     });
     this.buildFeedback(panel);
+    this.buildCredits(panel);
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
     this.dial = $('#dial');
@@ -589,6 +591,7 @@ export class UI {
     open.addEventListener('click', () => {
       this.h.clickSound();
       settingsPanel.hidden = true;
+      $('#credits').hidden = true;
       box.hidden = false;
       if (kind) text.focus();
     });
@@ -628,6 +631,33 @@ export class UI {
     const [k, isBad] = this.fbMsgKey || ['', false];
     this.fbMsg.textContent = k ? t(k) : '';
     this.fbMsg.classList.toggle('bad', isBad);
+  }
+
+  // ---------- 制作与鸣谢 ----------
+
+  buildCredits(settingsPanel) {
+    const box = $('#credits');
+    const close = () => (box.hidden = true);
+    $('#btn-credits').addEventListener('click', () => {
+      this.h.clickSound();
+      settingsPanel.hidden = true;
+      $('#feedback').hidden = true;
+      box.hidden = false;
+      $('#cr-close').focus();
+    });
+    $('#cr-close').addEventListener('click', close);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  }
+
+  // 名单按 music.js 里的曲目现排，换了曲目不用另外改这里
+  renderCredits() {
+    $('#cr-body').innerHTML =
+      `<h4>${t('cr.by')}</h4><p>${AUTHOR}</p><h4>${t('cr.music')}</h4><ul class="cr-list">` +
+      TRACKS.map((k) => `<li><a href="${k.url}" target="_blank" rel="noopener">${k.title}</a><span>${k.by}</span></li>`).join('') +
+      `</ul><p class="s-note">${t('cr.musicNote')}</p><h4>${t('cr.tech')}</h4><p>${t('cr.techNote')}</p><p>${t('cr.thanks')}</p>`;
+    $('#cr-ver').textContent = t('cr.version', VERSION);
   }
 
   toast(text, seconds = 1.8) {

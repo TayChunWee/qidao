@@ -2,7 +2,7 @@
 import { FPS_CHOICES } from './perf.js';
 import { World, SOLIDS, SOLO, START_CENTER } from './world.js';
 import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS } from './wishes.js';
-import { MODULES, TABS, H, DAY_LENGTH, SIZE } from './config.js';
+import { MODULES, TABS, H, DAY_LENGTH, SIZE, VERSION } from './config.js';
 import { t, nameOf, getLang, setLang } from './i18n.js';
 import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf } from './progression.js';
 import { thumbParts } from './viewmodel.js';
@@ -238,7 +238,7 @@ export class Game {
   // 随反馈一起寄出的几行情况：玩家说"卡""放不了"的时候，不用再回头问他用的什么浏览器、玩到哪了
   feedbackInfo() {
     return [
-      `语言 ${getLang()}`,
+      `版本 ${VERSION}，语言 ${getLang()}`,
       `小岛 ${this.level + 1} 级，繁荣度 ${this.prosperity}，建造规模 ${this.world.count()}`,
       `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}`,
       `窗口 ${window.innerWidth}×${window.innerHeight}（像素比 ${window.devicePixelRatio}）`,

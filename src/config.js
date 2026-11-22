@@ -6,6 +6,9 @@ export const H = 0.62; // 每层高度
 export const BODY = 0.84; // 房间主体宽度
 export const HALF = BODY / 2;
 export const DAY_LENGTH = 240; // 一昼夜的秒数
+// 版本：每次发布到线上时改成当天的日期。显示在"制作与鸣谢"里，也随玩家的反馈一起寄出
+export const VERSION = '2026-11-23';
+export const AUTHOR = 'ovob'; // 作者署名，显示在"制作与鸣谢"最上面
 
 // 方向：0 北(-z) 1 东(+x) 2 南(+z) 3 西(-x)
 export const DIRS = [

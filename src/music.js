@@ -1,18 +1,18 @@
 // 背景音乐：播放 music/ 文件夹里的曲目。
 // 三种放法：随机轮播（两首之间留一小段安静，只剩海浪声）、指定一首单曲循环、或者不放曲目改用合成音乐。
-// 曲目全部是作者以 CC0 方式公开的作品，响度已经统一过。
+// 曲目全部是作者以 CC0 方式公开的作品，响度已经统一过。url 是作者发布这首曲子的页面，列在"制作与鸣谢"里。
 
 export const TRACKS = [
-  { id: 'ocean-breeze', title: 'Ocean Breeze', by: 'HoliznaCC0', file: '01-ocean-breeze.mp3' },
-  { id: 'calm-currents', title: 'Calm Currents', by: 'HoliznaCC0', file: '02-calm-currents.mp3' },
-  { id: 'tokyo-sunset', title: 'Tokyo Sunset', by: 'HoliznaCC0', file: '03-tokyo-sunset.mp3' },
-  { id: 'infinite-echoes', title: 'Infinite Echoes', by: 'HoliznaCC0', file: '04-infinite-echoes.mp3' },
-  { id: 'a-cup-of-tea', title: 'A cup of tea', by: 'TAD', file: '05-a-cup-of-tea.mp3' },
-  { id: 'bartender', title: 'Bartender', by: 'TAD', file: '06-bartender.mp3' },
-  { id: 'bluebonnet', title: 'Bluebonnet', by: 'Kistol', file: '07-bluebonnet.mp3' },
-  { id: 'sunset-plains', title: 'Sunset Plains', by: 'Yoiyami', file: '08-sunset-plains.mp3' },
-  { id: 'apple-cider', title: 'Apple Cider', by: 'Zane Little Music', file: '09-apple-cider.mp3' },
-  { id: 'sleepy-little-mouse', title: 'Sleepy Little Mouse', by: 'Tsorthan Grove', file: '10-sleepy-little-mouse.mp3' },
+  { id: 'ocean-breeze', title: 'Ocean Breeze', by: 'HoliznaCC0', file: '01-ocean-breeze.mp3', url: 'https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/ocean-breeze-lofi-ukulele-peaceful-mp3/' },
+  { id: 'calm-currents', title: 'Calm Currents', by: 'HoliznaCC0', file: '02-calm-currents.mp3', url: 'https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/calm-currents-lofi-relax-calm' },
+  { id: 'tokyo-sunset', title: 'Tokyo Sunset', by: 'HoliznaCC0', file: '03-tokyo-sunset.mp3', url: 'https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/tokyo-sunset-lofi-peaceful-soft/' },
+  { id: 'infinite-echoes', title: 'Infinite Echoes', by: 'HoliznaCC0', file: '04-infinite-echoes.mp3', url: 'https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/infinite-echoes-lofi-dreamy-soft/' },
+  { id: 'a-cup-of-tea', title: 'A cup of tea', by: 'TAD', file: '05-a-cup-of-tea.mp3', url: 'https://opengameart.org/content/lofi-compilation' },
+  { id: 'bartender', title: 'Bartender', by: 'TAD', file: '06-bartender.mp3', url: 'https://opengameart.org/content/lofi-compilation' },
+  { id: 'bluebonnet', title: 'Bluebonnet', by: 'Kistol', file: '07-bluebonnet.mp3', url: 'https://opengameart.org/content/bluebonnet' },
+  { id: 'sunset-plains', title: 'Sunset Plains', by: 'Yoiyami', file: '08-sunset-plains.mp3', url: 'https://opengameart.org/content/sunset-plains' },
+  { id: 'apple-cider', title: 'Apple Cider', by: 'Zane Little Music', file: '09-apple-cider.mp3', url: 'https://opengameart.org/content/apple-cider' },
+  { id: 'sleepy-little-mouse', title: 'Sleepy Little Mouse', by: 'Tsorthan Grove', file: '10-sleepy-little-mouse.mp3', url: 'https://opengameart.org/content/sleepy-little-mouse' },
 ];
 
 const DIR = 'music/';

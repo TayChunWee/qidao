@@ -4,6 +4,11 @@ import { Game } from './game.js';
 import { Pacer } from './perf.js';
 import { t } from './i18n.js';
 
+// 程序文件都加载到了。网太慢时页面上可能已经先打出了"没能加载"的提示，这里收回去
+window.__booted = true;
+const bootMsg = document.getElementById('fatal');
+if (bootMsg.dataset.boot) bootMsg.hidden = true;
+
 function fatal(msg) {
   const el = document.getElementById('fatal');
   el.hidden = false;
