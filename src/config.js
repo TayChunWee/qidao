@@ -9,10 +9,10 @@ export const DAY_LENGTH = 240; // 一昼夜的秒数
 
 // 方向：0 北(-z) 1 东(+x) 2 南(+z) 3 西(-x)
 export const DIRS = [
-  { x: 0, z: -1, name: '北' },
-  { x: 1, z: 0, name: '东' },
-  { x: 0, z: 1, name: '南' },
-  { x: -1, z: 0, name: '西' },
+  { x: 0, z: -1 },
+  { x: 1, z: 0 },
+  { x: 0, z: 1 },
+  { x: -1, z: 0 },
 ];
 export const opp = (d) => (d + 2) % 4;
 // 让模型的 +z 正面朝向方向 d 所需的 Y 轴旋转
@@ -104,52 +104,29 @@ export const C = {
   spark: '#ffe08a',
 };
 
-export const NAMES = {
-  room: '房间',
-  balcony: '阳台',
-  road: '路',
-  garden: '花园',
-  tree: '树',
-  shop: '小店',
-  workshop: '工坊',
-  tower: '塔楼',
-  lamp: '灯柱',
-  dock: '码头',
-  well: '水井',
-  field: '菜地',
-  fountain: '喷泉',
-  pavilion: '凉亭',
-  market: '集市',
-  greenhouse: '温室',
-  windmill: '风车',
-  lighthouse: '灯塔',
-};
-
-export const TABS = [
-  { id: 'build', name: '建筑' },
-  { id: 'ground', name: '地面' },
-];
+// 模块的名字和说明都在 lang/ 的文字表里（name.<id>、desc.<id>、tab.<id>）
+export const TABS = [{ id: 'build' }, { id: 'ground' }];
 
 // tab：在工具栏的哪一页；rot：摆放时 R 键是否有意义；paint：是否支持按住拖动连续摆放
 // 数字键 1-9 对应当前这一页里从左到右的模块
 export const MODULES = [
-  { id: 'room', tab: 'build', desc: '可以一层层叠高。挨着的房间会自己连通。' },
-  { id: 'balcony', tab: 'build', rot: true, desc: '装在二层以上房间的外墙上。按 R 换朝向。' },
-  { id: 'tower', tab: 'build', desc: '石砌的塔楼，可以叠高，顶上有尖顶。' },
-  { id: 'shop', tab: 'build', rot: true, desc: '只能开在底层，楼上可以住人。热闹，但有点吵。' },
-  { id: 'workshop', tab: 'build', rot: true, desc: '只能开在底层，楼上可以住人。烟囱会跟着楼一起长高。' },
-  { id: 'windmill', tab: 'build', rot: true, desc: '独立的一座，上面不能再盖。叶片会慢慢转。' },
-  { id: 'greenhouse', tab: 'build', rot: true, desc: '独立的玻璃房，上面不能再盖。夜里会透出暖光。' },
-  { id: 'market', tab: 'build', rot: true, desc: '露天的集市摊位，上面不能再盖。热闹，也有点吵。' },
-  { id: 'lighthouse', tab: 'build', desc: '要建在水边。很高，夜里会亮起来。' },
-  { id: 'road', tab: 'ground', paint: true, desc: '按住拖动可以连续铺。门会朝着路开。' },
-  { id: 'garden', tab: 'ground', paint: true, desc: '一小片花圃。有人很喜欢它。' },
-  { id: 'tree', tab: 'ground', paint: true, desc: '会随风轻轻摇。' },
-  { id: 'lamp', tab: 'ground', desc: '天黑以后会亮起来。' },
-  { id: 'dock', tab: 'ground', desc: '只能建在紧挨陆地的水面上。' },
-  { id: 'well', tab: 'ground', desc: '一口石头水井。' },
-  { id: 'field', tab: 'ground', paint: true, desc: '按住拖动可以连续开垦。' },
-  { id: 'pavilion', tab: 'ground', desc: '可以走进去歇脚的小亭子。' },
-  { id: 'fountain', tab: 'ground', desc: '哗哗的水声，很多人喜欢。' },
+  { id: 'room', tab: 'build' },
+  { id: 'balcony', tab: 'build', rot: true },
+  { id: 'tower', tab: 'build' },
+  { id: 'shop', tab: 'build', rot: true },
+  { id: 'workshop', tab: 'build', rot: true },
+  { id: 'windmill', tab: 'build', rot: true },
+  { id: 'greenhouse', tab: 'build', rot: true },
+  { id: 'market', tab: 'build', rot: true },
+  { id: 'lighthouse', tab: 'build' },
+  { id: 'road', tab: 'ground', paint: true },
+  { id: 'garden', tab: 'ground', paint: true },
+  { id: 'tree', tab: 'ground', paint: true },
+  { id: 'lamp', tab: 'ground' },
+  { id: 'dock', tab: 'ground' },
+  { id: 'well', tab: 'ground' },
+  { id: 'field', tab: 'ground', paint: true },
+  { id: 'pavilion', tab: 'ground' },
+  { id: 'fountain', tab: 'ground' },
 ];
 for (const tab of TABS) MODULES.filter((m) => m.tab === tab.id).forEach((m, i) => (m.key = String(i + 1)));

@@ -1,6 +1,6 @@
 // 繁荣度与小岛等级。繁荣度 = 全岛居民的评价之和（勉强 1、满意 2、惊喜 3），实现一个"新想法"再加 1。
 // 等级只升不降：升级解锁新模块、提高居民上限，有几级还会让小岛长出新的陆地。
-import { NAMES } from './config.js';
+import { t, nameOf } from './i18n.js';
 
 // need：升到这一级需要的繁荣度；cap：居民上限；stage：小岛扩张到第几阶段；unlock：这一级解锁的模块
 export const LEVELS = [
@@ -16,8 +16,6 @@ export const LEVELS = [
   { need: 50, cap: 20, final: true, unlock: [] },
 ];
 export const MAX_LV = LEVELS.length - 1;
-
-const STAGE_TEXT = ['', '小岛向东长出一片新陆地', '小岛向北长出一片新陆地', '小岛向西、向南长出一大片新陆地'];
 
 export function prosperityOf(results) {
   let p = 0;
@@ -52,9 +50,9 @@ export function unlockLevel(id) {
 export function rewardsOf(lv) {
   const L = LEVELS[lv];
   const out = [];
-  if (L.final) return ['大家都住得很舒心', '接下来随你喜欢'];
-  if (L.stage) out.push(STAGE_TEXT[L.stage]);
-  if (L.unlock.length) out.push(`新模块：${L.unlock.map((id) => NAMES[id]).join('、')}`);
-  if (lv > 0 && L.cap > LEVELS[lv - 1].cap) out.push(`能住下 ${L.cap} 位居民`);
+  if (L.final) return [t('reward.final1'), t('reward.final2')];
+  if (L.stage) out.push(t('reward.stage', L.stage));
+  if (L.unlock.length) out.push(t('reward.unlock', L.unlock.map(nameOf)));
+  if (lv > 0 && L.cap > LEVELS[lv - 1].cap) out.push(t('reward.cap', L.cap));
   return out;
 }

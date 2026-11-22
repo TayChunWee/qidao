@@ -2,11 +2,12 @@ import { View } from './view.js';
 import { AudioEngine } from './audio.js';
 import { Game } from './game.js';
 import { Pacer } from './perf.js';
+import { t } from './i18n.js';
 
 function fatal(msg) {
   const el = document.getElementById('fatal');
   el.hidden = false;
-  el.textContent = `游戏没能启动。\n${msg}`;
+  el.textContent = t('fatal', msg);
 }
 
 try {

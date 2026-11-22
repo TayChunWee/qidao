@@ -1,5 +1,6 @@
 // 游戏状态与规则。不依赖任何渲染代码。
-import { SIZE, MAX_LEVEL, DIRS, opp, NAMES, hash } from './config.js';
+import { SIZE, MAX_LEVEL, DIRS, opp, hash } from './config.js';
+import { t } from './i18n.js';
 
 // 可以叠高的实体块；SOLO 是独立的一座，只能建在地面，上面不能再盖（值是它相当于几层楼高）
 export const STACKS = ['room', 'shop', 'workshop', 'tower'];
@@ -98,38 +99,38 @@ export class World {
 
   check(type, x, z, opt = {}) {
     const c = this.cell(x, z);
-    if (!c) return fail('这里已经出岛了');
+    if (!c) return fail(t('why.offIsland'));
     if (type === 'balcony') return this.checkBalcony(x, z, opt.level, opt.dir);
 
     if (type === 'dock') {
-      if (!c.water) return fail(c.locked ? '这片沙洲还没长出土地' : '码头要建在水面上');
-      if (c.g) return fail('这里已经有码头了');
-      if (this.dockDir(x, z) < 0) return fail('码头要紧挨着陆地');
+      if (!c.water) return fail(t(c.locked ? 'why.sandbar' : 'why.dockOnWater'));
+      if (c.g) return fail(t('why.dockHere'));
+      if (this.dockDir(x, z) < 0) return fail(t('why.dockByLand'));
       return ok({ level: 0 });
     }
-    if (c.water) return fail('这里是水面，只能建码头');
-    if (c.locked) return fail('这片沙洲还没长出土地');
+    if (c.water) return fail(t('why.waterOnlyDock'));
+    if (c.locked) return fail(t('why.sandbar'));
 
     if (GROUNDS.includes(type)) {
-      if (c.s.length) return fail('这里已经有建筑了');
-      if (c.g) return fail(c.g.t === type ? `这里已经有${NAMES[type]}了` : `先拆掉这里的${NAMES[c.g.t]}`);
+      if (c.s.length) return fail(t('why.hasBuilding'));
+      if (c.g) return fail(c.g.t === type ? t('why.hasSame', type) : t('why.removeFirst', c.g.t));
       return ok({ level: 0 });
     }
 
     // 实体块
-    if (c.g) return fail(`先拆掉这里的${NAMES[c.g.t]}`);
+    if (c.g) return fail(t('why.removeFirst', c.g.t));
     const level = c.s.length;
-    if (level && SOLO[c.s[0].t]) return fail(`${NAMES[c.s[0].t]}上面不能再盖了`);
-    if (level >= MAX_LEVEL) return fail('已经盖到最高了');
-    if (SOLO[type] && level > 0) return fail(`${NAMES[type]}要建在空地上`);
-    if ((type === 'shop' || type === 'workshop') && level > 0) return fail(`${NAMES[type]}只能开在底层`);
-    if (type === 'lighthouse' && !this.near(x, z, 1, (n) => n.water)) return fail('灯塔要建在水边');
+    if (level && SOLO[c.s[0].t]) return fail(t('why.soloTop', c.s[0].t));
+    if (level >= MAX_LEVEL) return fail(t('why.maxHeight'));
+    if (SOLO[type] && level > 0) return fail(t('why.soloGround', type));
+    if ((type === 'shop' || type === 'workshop') && level > 0) return fail(t('why.groundFloor', type));
+    if (type === 'lighthouse' && !this.near(x, z, 1, (n) => n.water)) return fail(t('why.lighthouseWater'));
     const top = level + (SOLO[type] || 1);
     for (let d = 0; d < 4; d++) {
       const n = this.cell(x + DIRS[d].x, z + DIRS[d].z);
       if (!n) continue;
       for (let lv = level; lv < top; lv++) {
-        if (n.s[lv] && n.s[lv].b[opp(d)]) return fail('旁边的阳台挡住了这里');
+        if (n.s[lv] && n.s[lv].b[opp(d)]) return fail(t('why.balconyBlocks'));
       }
     }
     return ok({ level });
@@ -138,11 +139,11 @@ export class World {
   checkBalcony(x, z, level, dir) {
     const c = this.cell(x, z);
     const b = c && c.s[level];
-    if (!b || b.t !== 'room') return fail('阳台要装在房间的外墙上');
-    if (level < 1) return fail('阳台要装在二层以上');
-    if (b.b[dir]) return fail('这面墙已经有阳台了');
+    if (!b || b.t !== 'room') return fail(t('why.balconyWall'));
+    if (level < 1) return fail(t('why.balconyFloor'));
+    if (b.b[dir]) return fail(t('why.balconyTaken'));
     const n = this.cell(x + DIRS[dir].x, z + DIRS[dir].z);
-    if (n && this.heightOf(n) > level) return fail('这面墙被隔壁挡住了');
+    if (n && this.heightOf(n) > level) return fail(t('why.wallBlocked'));
     return ok({ level });
   }
 
@@ -215,18 +216,18 @@ export class World {
   // 成功时世界已经改好；失败时世界不变，并说明原因
   relocate(pairs, turns = 0) {
     const from = new Set(pairs.map((p) => p.from.z * SIZE + p.from.x));
-    for (const { from: f, to: t } of pairs) {
+    for (const { from: f, to } of pairs) {
       const src = this.cell(f.x, f.z);
-      const d = this.cell(t.x, t.z);
-      if (!d) return fail('挪到小岛外面去了');
+      const d = this.cell(to.x, to.z);
+      if (!d) return fail(t('why.moveOff'));
       if (src.g && src.g.t === 'dock') {
-        if (!d.water) return fail('码头要放在水面上');
+        if (!d.water) return fail(t('why.moveDockWater'));
       } else if (d.water) {
-        return fail('这里是水面，放不下');
+        return fail(t('why.moveWater'));
       } else if (d.locked) {
-        return fail('这片沙洲还没长出土地');
+        return fail(t('why.sandbar'));
       }
-      if ((d.g || d.s.length) && !from.has(t.z * SIZE + t.x)) return fail('那边已经有东西了');
+      if ((d.g || d.s.length) && !from.has(to.z * SIZE + to.x)) return fail(t('why.moveTaken'));
     }
     const before = this.invalid();
     const snap = this.serialize();
@@ -237,8 +238,8 @@ export class World {
       c.s = [];
       return h;
     });
-    pairs.forEach(({ to: t }, i) => {
-      const d = this.cell(t.x, t.z);
+    pairs.forEach(({ to }, i) => {
+      const d = this.cell(to.x, to.z);
       d.g = held[i].g;
       d.s = held[i].s;
       if (!turns) return;
@@ -262,14 +263,14 @@ export class World {
     for (let z = 0; z < SIZE; z++) {
       for (let x = 0; x < SIZE; x++) {
         const c = this.cell(x, z);
-        if (c.g && c.g.t === 'dock' && this.dockDir(x, z) < 0) return '码头要紧挨着陆地';
+        if (c.g && c.g.t === 'dock' && this.dockDir(x, z) < 0) return t('why.dockByLand');
         if (!c.s.length) continue;
-        if (c.s[0].t === 'lighthouse' && !this.near(x, z, 1, (n) => n.water)) return '灯塔要建在水边';
+        if (c.s[0].t === 'lighthouse' && !this.near(x, z, 1, (n) => n.water)) return t('why.lighthouseWater');
         for (let lv = 1; lv < c.s.length; lv++) {
           for (let d = 0; d < 4; d++) {
             if (!c.s[lv].b[d]) continue;
             const n = this.cell(x + DIRS[d].x, z + DIRS[d].z);
-            if (n && this.heightOf(n) > lv) return '有阳台会被挡住';
+            if (n && this.heightOf(n) > lv) return t('why.balconyWouldBlock');
           }
         }
       }

@@ -12,7 +12,21 @@
   --shadow: 0 10px 28px rgba(90, 60, 40, 0.16), 0 2px 6px rgba(90, 60, 40, 0.08);
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --tool: clamp(46px, 5.4vw, 66px);
+  /* 设置面板的宽度和左边那列标签的宽度：各种语言的字数不一样 */
+  --set-w: 236px;
+  --set-label: 34px;
   font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+/* 英文和日文各用自己的字体；日文如果落到中文字体上，不少汉字的写法会不对 */
+:root:lang(en) {
+  --set-w: 272px;
+  --set-label: 62px;
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+:root:lang(ja) {
+  --set-w: 262px;
+  --set-label: 54px;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -112,8 +126,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .wish-body { min-width: 0; flex: 1; }
 .wish-top { display: flex; align-items: center; gap: 8px; }
-.wish-top b { font-size: 15px; font-weight: 700; }
-.tier { font-size: 12px; color: var(--ink-soft); }
+.wish-top b { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.tier { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 .pips { display: flex; gap: 4px; margin-left: auto; }
 .pips i { width: 9px; height: 9px; border-radius: 50%; background: rgba(120, 90, 60, 0.16); transition: background 0.3s, transform 0.3s var(--spring); }
 .pips i.on { background: var(--gold); transform: scale(1.15); box-shadow: 0 0 0 2px rgba(242, 194, 97, 0.25); }
@@ -202,14 +216,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .icon-btn:hover { background: rgba(232, 132, 107, 0.14); color: var(--accent-deep); transform: translateY(-1px); }
 .icon-btn:active { transform: scale(0.9); }
 
-#settings { position: absolute; right: 16px; top: 72px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; width: 230px; }
+#settings { position: absolute; right: 16px; top: 72px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; width: var(--set-w); }
 #settings[hidden] { display: none; }
 #settings label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-#settings label span:nth-child(2) { width: 34px; }
-.s-icon { display: grid; color: var(--ink-soft); }
+#settings label span:nth-child(2) { flex: none; width: var(--set-label); }
+.s-icon { display: grid; flex: none; width: 20px; color: var(--ink-soft); }
 input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--accent); cursor: pointer; }
 .s-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.s-row > span:nth-child(2) { width: 34px; }
+.s-row > span:nth-child(2) { flex: none; width: var(--set-label); }
+#settings select {
+  flex: 1; min-width: 0; height: 26px; padding: 0 6px; border: 0; border-radius: 9px; font: inherit; font-size: 12px; color: var(--ink);
+  background: rgba(120, 90, 60, 0.08); cursor: pointer;
+}
+#settings select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.icon-btn.mini { flex: none; width: 26px; height: 26px; border-radius: 9px; }
+.icon-btn.mini svg { width: 16px; height: 16px; }
+.icon-btn:disabled { opacity: 0.35; cursor: default; transform: none; background: none; }
 .seg { flex: 1; display: flex; padding: 2px; border-radius: 11px; background: rgba(120, 90, 60, 0.08); }
 .seg button { flex: 1; padding: 4px 0; border-radius: 9px; font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; transition: background 0.15s, color 0.15s; }
 .seg button:hover { color: var(--accent-deep); }
@@ -251,7 +273,10 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
   transition: transform 0.22s var(--spring), background 0.15s, box-shadow 0.2s;
 }
 .tool img { width: calc(var(--tool) - 14px); height: calc(var(--tool) - 14px); display: block; pointer-events: none; filter: drop-shadow(0 3px 3px rgba(90, 60, 40, 0.18)); transition: transform 0.22s var(--spring); }
-.tool .name { font-size: 12px; line-height: 1.2; white-space: nowrap; }
+.tool .name { font-size: 12px; line-height: 1.2; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* 英文的名字长：字号小一点，按钮窄的时候放不下就省略，鼠标移上去的提示里有全名 */
+:lang(en) .tool .name { font-size: 11px; letter-spacing: -0.02em; }
+:lang(ja) .tool .name { font-size: 11px; }
 .tool .key {
   position: absolute; left: 4px; top: 3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 6px;
   font-size: 10px; line-height: 16px; text-align: center; color: var(--ink-soft); background: rgba(120, 90, 60, 0.1);
@@ -309,7 +334,7 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
 
 #toast {
   position: absolute; left: 50%; bottom: calc(var(--tool) + 98px); transform: translate(-50%, 8px); padding: 8px 18px; border-radius: 18px;
-  background: rgba(90, 70, 60, 0.9); color: #fff8ec; font-size: 13px; white-space: nowrap;
+  background: rgba(90, 70, 60, 0.9); color: #fff8ec; font-size: 13px; width: max-content; max-width: calc(100vw - 32px); text-align: center;
   opacity: 0; transition: opacity 0.2s, transform 0.3s var(--spring);
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -361,6 +386,14 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
 #btn-start:hover { transform: translateY(-3px) scale(1.03); }
 #btn-start:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--accent-deep); }
 .start-card .tip { margin-top: 18px; font-size: 12px; color: var(--ink-soft); }
+#btn-start:empty { visibility: hidden; }
+:lang(en) .start-card .sub { letter-spacing: 0.06em; margin-right: 0; }
+:lang(ja) .start-card .sub { letter-spacing: 0.14em; margin-right: -0.14em; }
+:lang(en) #btn-start { letter-spacing: 0.03em; }
+.langs { margin-top: 14px; display: flex; justify-content: center; gap: 4px; }
+.langs button { padding: 3px 12px; border-radius: 11px; font-size: 12px; color: var(--ink-soft); transition: background 0.15s, color 0.15s; }
+.langs button:hover { background: rgba(255, 255, 255, 0.5); color: var(--ink); }
+.langs button.on { background: rgba(255, 255, 255, 0.75); color: var(--ink); font-weight: 700; }
 
 #fatal { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: #fff9ee; text-align: center; white-space: pre-wrap; }
 #fatal[hidden] { display: none; }

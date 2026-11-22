@@ -1,8 +1,12 @@
-// 声音全部用 Web Audio 实时合成，不加载任何音频文件。
-// 音乐：和弦铺底 + 五声音阶旋律，建得越多乐器层越多，昼夜切换时换一套和弦与音色。
+// 音效和海浪声全部用 Web Audio 实时合成。背景音乐默认播放 music/ 里的曲目（见 music.js），
+// 也可以在设置里换回合成音乐：和弦铺底 + 五声音阶旋律，建得越多乐器层越多，昼夜切换时换一套和弦与音色。
 // 所有声部都踩在同一套拍点上（半拍一格，不摇摆、不随机错位）：旋律是带长音的四小节乐句，
 // 伴奏是一拍一个音的分解和弦，低音只在第一、三拍。
 // 音效：摆放、拆除、旋转、无效、界面、愿望达成。摆放音与音乐同调，连续摆放逐级升高。
+import { MusicPlayer } from './music.js';
+
+// 曲目相对合成音乐的音量。曲目的响度已经统一，这个数让两者听起来差不多响
+const FILE_LEVEL = 1;
 
 const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
 const PENTA = [0, 2, 4, 7, 9]; // C 大调五声音阶
@@ -99,6 +103,9 @@ export class AudioEngine {
     this.beat = 60 / this.bpm;
     this.step = 0;
     this.prog = PROG_DAY;
+    this.music = new MusicPlayer();
+    this.trackMode = 'shuffle';
+    this.synthOn = false;
     // 页面切到后台（换了标签页、最小化、关掉）就停声，回来再接着响
     const sync = () => this.setPaused(document.hidden);
     document.addEventListener('visibilitychange', sync);
@@ -110,6 +117,7 @@ export class AudioEngine {
     if (!this.ctx || this.ctx.state === 'closed') return;
     if (paused) this.ctx.suspend();
     else this.ctx.resume();
+    this.music.setPaused(paused);
   }
 
   get ready() {
@@ -153,12 +161,16 @@ export class AudioEngine {
     air.connect(this.master);
     this.musicBus = G(this.musicVol, lowCut);
     this.sfxBus = G(this.sfxVol, this.master);
+    // 合成音乐的各个乐器层都先进这里，放曲目的时候整个关掉；海浪声不经过它，一直都在
+    this.synthBus = G(0, this.musicBus);
+    // 曲目是做好的成品，不再过均衡和压缩，直接输出
+    this.fileBus = G(this.musicVol * FILE_LEVEL, ctx.destination);
 
     // 混响只留一点空间感：尾巴短（约 1.2 秒），回送量小，免得声音糊成一片
     const ir = impulse(ctx, 1.2);
     const mRev = ctx.createConvolver();
     mRev.buffer = ir;
-    mRev.connect(G(0.34, this.musicBus));
+    mRev.connect(G(0.34, this.synthBus));
     this.mSend = G(1, mRev);
     const sRev = ctx.createConvolver();
     sRev.buffer = ir;
@@ -169,7 +181,7 @@ export class AudioEngine {
     // 每个乐器层：干声进音乐总线，另一路进混响
     const layer = (dry, wet, on) => {
       const input = G(on ? 1 : 0);
-      input.connect(G(dry, this.musicBus));
+      input.connect(G(dry, this.synthBus));
       input.connect(G(wet, this.mSend));
       return input;
     };
@@ -217,13 +229,50 @@ export class AudioEngine {
     this.nextTime = now + 0.4;
     this.applyIntensity();
     this.timer = setInterval(() => this.tick(), 60);
+
+    this.music.attach(ctx, this.fileBus);
+    // 曲目文件都放不出来的话，退回合成音乐，免得游戏没有音乐
+    this.music.onFail = () => {
+      this.useSynth(true);
+      if (this.music.onChange) this.music.onChange(null);
+    };
+    this.setTrack(this.trackMode);
   }
 
   // ---------- 外部控制 ----------
 
   setMusic(v) {
     this.musicVol = v;
-    if (this.ctx) this.musicBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+    if (!this.ctx) return;
+    this.musicBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+    this.fileBus.gain.setTargetAtTime(v * FILE_LEVEL, this.ctx.currentTime, 0.05);
+  }
+
+  // 背景音乐放什么：'shuffle' 随机轮播、某一首的 id（单曲循环）、'synth' 合成音乐
+  setTrack(mode) {
+    this.trackMode = mode;
+    if (!this.ctx) return;
+    this.music.setMode(mode);
+    this.trackMode = this.music.mode;
+    this.useSynth(this.trackMode === 'synth');
+  }
+
+  // "下一首"，返回换完之后的放法
+  nextTrack() {
+    if (this.ctx) this.trackMode = this.music.skip();
+    return this.trackMode;
+  }
+
+  useSynth(on) {
+    if (on === this.synthOn) return;
+    this.synthOn = on;
+    const now = this.ctx.currentTime;
+    this.synthBus.gain.setTargetAtTime(on ? 1 : 0, now, 0.4);
+    if (on) {
+      // 从下一小节的开头接着奏
+      this.step = Math.ceil(this.step / 8) * 8;
+      this.nextTime = now + 0.5;
+    }
   }
 
   setSfx(v) {
@@ -306,7 +355,7 @@ export class AudioEngine {
 
   tick() {
     const ctx = this.ctx;
-    if (!ctx || ctx.state !== 'running') return;
+    if (!ctx || ctx.state !== 'running' || !this.synthOn) return;
     if (this.nextTime < ctx.currentTime - 0.3) this.nextTime = ctx.currentTime + 0.1;
     while (this.nextTime < ctx.currentTime + 0.3) {
       this.scheduleStep(this.step, this.nextTime);

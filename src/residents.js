@@ -1,4 +1,5 @@
 // 居民小人：在岛上走动，到点了上阳台、照看花园，夜里回家。行为只读取 World 和愿望评估结果。
+import { t } from './i18n.js';
 import * as THREE from 'three';
 import { SIZE, H, DIRS, DIR_RY } from './config.js';
 import { buildResident } from './models.js';
@@ -354,7 +355,7 @@ export class Resident {
     this.timer = 1;
     this.scale = 0.4;
     this.scaleGoal = 1;
-    this.say('哎呀！', 1.6);
+    this.say(t('res.oops'), 1.6);
   }
 
   placeNear(w, x, z) {

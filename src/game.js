@@ -1,12 +1,14 @@
 // 把逻辑、画面、声音和界面接在一起：工具、输入、撤销、存档、居民到来、愿望变化、小岛升级。
 import { FPS_CHOICES } from './perf.js';
 import { World, SOLIDS, SOLO, START_CENTER } from './world.js';
-import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS, TIER_NAMES } from './wishes.js';
-import { MODULES, TABS, NAMES, H, DIRS, DAY_LENGTH, SIZE } from './config.js';
+import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS } from './wishes.js';
+import { MODULES, TABS, H, DAY_LENGTH, SIZE } from './config.js';
+import { t, nameOf, getLang, setLang } from './i18n.js';
 import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf } from './progression.js';
 import { thumbParts } from './viewmodel.js';
 import { Resident, arrivalCell, walkable } from './residents.js';
 import { UI } from './ui.js';
+import { TRACKS } from './music.js';
 
 const SAVE_KEY = 'qidao-save-v2';
 const SETTINGS_KEY = 'qidao-settings-v1';
@@ -65,14 +67,20 @@ export class Game {
     this.prosperity = 0;
     this.done = false;
 
-    this.settings = { music: 0.7, sfx: 0.8, fps: 144, showFps: false, tutorialDone: false, growthTipDone: false };
+    // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
       /* 读不到设置就用默认值 */
     }
+    // 语言要在搭界面之前定下来
+    setLang(this.settings.lang || getLang());
     audio.musicVol = this.settings.music;
     audio.sfxVol = this.settings.sfx;
+    if (!['shuffle', 'synth'].includes(this.settings.track) && !TRACKS.some((k) => k.id === this.settings.track)) this.settings.track = 'shuffle';
+    audio.trackMode = this.settings.track;
+    audio.music.onChange = (track) => this.ui.setNowPlaying(track, !track && this.audio.trackMode !== 'synth' && !this.audio.synthOn);
     if (!FPS_CHOICES.includes(this.settings.fps)) this.settings.fps = 144;
 
     this.ui = new UI({
@@ -95,6 +103,16 @@ export class Game {
         this.settings.sfx = v;
         this.saveSettings();
       },
+      setTrack: (mode) => this.setTrack(mode),
+      nextTrack: () => {
+        this.audio.click();
+        this.setTrack(this.audio.nextTrack(), true);
+      },
+      setLang: (id) => {
+        this.settings.lang = setLang(id);
+        this.saveSettings();
+        this.applyLang();
+      },
       setFps: (v) => {
         this.settings.fps = v;
         this.pacer.setCap(v);
@@ -112,6 +130,7 @@ export class Game {
       clickSound: () => this.audio.click(),
     });
     this.ui.setVolumes(this.settings.music, this.settings.sfx);
+    this.ui.setTrack(this.settings.track);
     this.ui.setFpsChoice(this.settings.fps, this.settings.showFps);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
@@ -220,6 +239,24 @@ export class Game {
     } catch (e) {
       /* 同上 */
     }
+  }
+
+  // 换背景音乐的放法。already：声音那边已经换好了（按"下一首"时），这里只需要记下来
+  setTrack(mode, already = false) {
+    if (!already) this.audio.setTrack(mode);
+    this.settings.track = this.audio.trackMode;
+    this.ui.setTrack(this.settings.track);
+    this.saveSettings();
+  }
+
+  // 换了语言：界面上已经写出来的文字全部重写一遍。居民的评价里带着句子，所以重新算一次
+  applyLang() {
+    this.ui.applyLang();
+    this.clockTimer = 0;
+    this.results = this.evaluate();
+    this.ui.setWishes(this.results);
+    this.refreshProsperity();
+    this.refreshHover();
   }
 
   reset() {
@@ -346,7 +383,7 @@ export class Game {
     const i = this.roster.length - 1;
     const res = this.residents[i];
     this.audio.arrive();
-    this.ui.toast(`新居民：${res.def.name} 来到了岛上`, 2.4);
+    this.ui.toast(t('toast.arrive', res.def.name), 2.4);
     // 刚上岛先说自己想要什么；如果正好有现成的地方能住，就说住进去的感受
     res.say(this.results[i].tier >= 1 ? this.results[i].text : res.def.ask, 8);
   }
@@ -373,7 +410,7 @@ export class Game {
     this.residents[pick].say(this.results[pick].bonus.say, 7);
     this.audio.idea();
     this.ui.celebrate(r.spec.id);
-    this.ui.toast(`${r.spec.name}有了一个新想法`, 2.6);
+    this.ui.toast(t('toast.idea', r.spec.name), 2.6);
   }
 
   // ---------- 繁荣度与升级 ----------
@@ -449,7 +486,7 @@ export class Game {
     const m = MOD[id];
     if (m && !this.unlocked.has(id)) {
       this.audio.invalid();
-      this.ui.toast(`繁荣度达到 ${LEVELS[unlockLevel(id)].need} 才能解锁「${NAMES[id]}」`, 2.2);
+      this.ui.toast(t('toast.locked', LEVELS[unlockLevel(id)].need, nameOf(id)), 2.2);
       return;
     }
     this.tool = this.tool === id ? null : id;
@@ -513,7 +550,7 @@ export class Game {
       if (pick.balcony) return { kind: 'removeBalcony', x, z, level: pick.balcony.level, dir: pick.balcony.dir, valid: true };
       if (c.s.length) return { kind: 'remove', x, z, level: c.s.length - 1, solid: true, tall: SOLO[c.s[0].t] || 1, valid: true };
       if (c.g) return { kind: 'remove', x, z, level: 0, solid: false, valid: true };
-      return { kind: 'remove', x, z, level: 0, valid: false, reason: '这里没有东西可拆' };
+      return { kind: 'remove', x, z, level: 0, valid: false, reason: t('hint.nothing') };
     }
 
     if (tool === 'balcony') {
@@ -576,9 +613,9 @@ export class Game {
     }
     let text = '';
     if (!h.valid) text = h.reason;
-    else if (h.type === 'balcony') text = `朝${DIRS[h.dir].name} · 第 ${h.level + 1} 层`;
-    else if (h.kind === 'place' && h.rot) text = `朝${DIRS[h.dir].name}`;
-    else if (h.kind === 'place' && h.level >= 1) text = `第 ${h.level + 1} 层`;
+    else if (h.type === 'balcony') text = `${t('hint.facing', h.dir)} · ${t('hint.floor', h.level + 1)}`;
+    else if (h.kind === 'place' && h.rot) text = t('hint.facing', h.dir);
+    else if (h.kind === 'place' && h.level >= 1) text = t('hint.floor', h.level + 1);
     this.ui.setHint(text, this.mouse.x, this.mouse.y, !h.valid);
   }
 
@@ -645,8 +682,8 @@ export class Game {
     return this.roster.map((r) => {
       if (!r.homeKey) return r;
       const [x, z, lv] = r.homeKey.split(',').map(Number);
-      const t = to.get(`${x},${z}`);
-      return t ? { ...r, homeKey: `${t.x},${t.z},${lv}` } : r;
+      const dst = to.get(`${x},${z}`);
+      return dst ? { ...r, homeKey: `${dst.x},${dst.z},${lv}` } : r;
     });
   }
 
@@ -660,13 +697,13 @@ export class Game {
     for (const res of this.residents) {
       const indoors = res.state === 'inside' || res.state === 'perch';
       const at = indoors && res.homeKey ? res.homeKey.split(',').slice(0, 2).join(',') : `${res.x},${res.z}`;
-      const t = to.get(at);
-      if (!t) continue;
+      const dst = to.get(at);
+      if (!dst) continue;
       if (indoors && turns) {
         res.homeKey = ''; // 房子转了向：先出来，再自己走回去
       } else {
         const [fx, fz] = at.split(',').map(Number);
-        res.shift(t.x - fx, t.z - fz);
+        res.shift(dst.x - fx, dst.z - fz);
       }
     }
     this.sel = rect;
@@ -684,7 +721,7 @@ export class Game {
     const test = this.world.clone().relocate(pairs, 1);
     if (!test.ok) {
       this.audio.invalid();
-      this.ui.toast(`转过来放不下：${test.reason}。先搬到空一点的地方再转`, 2.6);
+      this.ui.toast(t('toast.rotBlocked', test.reason), 2.6);
       return;
     }
     this.rotFlip = !this.rotFlip;
@@ -760,7 +797,7 @@ export class Game {
         this.audio.click();
         if (!this.selTipShown) {
           this.selTipShown = true;
-          this.ui.toast('圈好了。拖动圈住的区域整块搬走，按 R 整块旋转', 3.6);
+          this.ui.toast(t('toast.selected'), 3.6);
         }
       }
       return;
@@ -793,11 +830,11 @@ export class Game {
       text = `${this.sel.x1 - this.sel.x0 + 1} × ${this.sel.z1 - this.sel.z0 + 1}`;
     } else if (d) {
       bad = !d.valid;
-      text = bad ? d.reason : d.dx || d.dz ? '松手放下' : '';
+      text = bad ? d.reason : d.dx || d.dz ? t('hint.drop') : '';
     } else if (!this.sel) {
-      text = '按住拖动，圈出要搬的一块';
+      text = t('hint.box');
     } else if (this.inSel(this.view.pickGround(m.x, m.y))) {
-      text = '拖动搬走 · 按 R 旋转';
+      text = t('hint.moveOrRotate');
     }
     this.ui.setHint(text, m.x, m.y, bad);
   }
@@ -850,7 +887,7 @@ export class Game {
         if (r.home) setTimeout(() => this.view.sparkle(r.home.x, r.home.z, r.home.level * H + 0.5), delay - 80);
         res.say(r.text, 6.5);
         this.ui.celebrate(r.id);
-        this.ui.toast(`${res.def.name}：${TIER_NAMES[r.tier]}`);
+        this.ui.toast(t('toast.tier', res.def.name, t('tier', r.tier)));
       } else if (r.tier < before) {
         if (!chimes) setTimeout(() => this.audio.sigh(), 300);
         res.say(r.text, 5.5);
@@ -860,7 +897,7 @@ export class Game {
         if (r.home) setTimeout(() => this.view.sparkle(r.home.x, r.home.z, r.home.level * H + 0.5), delay - 80);
         res.say(r.bonus.doneSay, 6.5);
         this.ui.celebrate(r.id);
-        this.ui.toast(`${res.def.name}的新想法实现了`);
+        this.ui.toast(t('toast.bonusDone', res.def.name));
       }
     });
   }
@@ -963,7 +1000,7 @@ export class Game {
       if (mod && !e.ctrlKey && !e.metaKey) {
         this.selectTool(mod.id);
       } else if (k === 'tab') {
-        const i = TABS.findIndex((t) => t.id === this.tab);
+        const i = TABS.findIndex((tab) => tab.id === this.tab);
         this.setTab(TABS[(i + 1) % TABS.length].id);
       } else if (k === 'r') {
         this.rotate();
