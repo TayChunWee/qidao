@@ -70,7 +70,7 @@ export class Game {
     this.done = false;
 
     // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
-    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, tutorialDone: false, growthTipDone: false };
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
@@ -126,6 +126,11 @@ export class Game {
         this.ui.setFpsChoice(this.settings.fps, on);
         this.saveSettings();
       },
+      setTheme: (mode) => {
+        this.settings.theme = mode;
+        this.ui.setThemeMode(mode, true);
+        this.saveSettings();
+      },
       reset: () => this.reset(),
       rotate: () => this.rotate(),
       aimConfirm: () => this.confirmAim(),
@@ -138,6 +143,7 @@ export class Game {
     this.ui.setVolumes(this.settings.music, this.settings.sfx);
     this.ui.setTrack(this.settings.track);
     this.ui.setFpsChoice(this.settings.fps, this.settings.showFps);
+    this.ui.setThemeMode(this.settings.theme);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
 
@@ -253,7 +259,7 @@ export class Game {
     return [
       `版本 ${VERSION}，语言 ${getLang()}`,
       `小岛 ${this.level + 1} 级，繁荣度 ${this.prosperity}，建造规模 ${this.world.count()}`,
-      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}`,
+      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}，界面 ${this.settings.theme}`,
       `窗口 ${window.innerWidth}×${window.innerHeight}（像素比 ${window.devicePixelRatio}）`,
       navigator.userAgent,
     ].join('\n');
@@ -526,6 +532,7 @@ export class Game {
     if (fromUi || this.started) this.audio.click();
     this.aim = null;
     this.pickKey = '';
+    this.ui.setAim(null); // 换了工具，上面那条提示重新露一次
     // 触屏上没有"鼠标移上去看说明"，选中模块时把说明弹出来
     if (this.touch && m && this.tool && this.started) this.ui.toast(descOf(id, true), 3.2);
     this.refreshHover();
@@ -1304,6 +1311,7 @@ export class Game {
       this.lastBright = bright;
       this.audio.setBright(bright);
     }
+    this.ui.updateTheme(this.view.night, dt);
 
     this.updateArrival(dt);
     this.ideaTick -= dt;

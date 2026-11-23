@@ -17,7 +17,7 @@ const ICON = {
   help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8"/><path d="M12 17v.2"/>'),
   music: svg('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
   sound: svg('<path d="M4 10v4h3l5 4V6L7 10z"/><path d="M16 9a4 4 0 0 1 0 6"/>'),
-  gauge: svg('<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-6"/>'),
+  gauge: svg('<path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="m12 14 4-4"/>'),
   sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>'),
   moon: svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'),
   move: svg('<rect x="3.5" y="3.5" width="11" height="11" rx="2" stroke-dasharray="3 2.6"/><path d="M12.5 12.5 20 20M20 14.5V20h-5.5"/>'),
@@ -37,6 +37,25 @@ const face = (mood) =>
   `<path d="${MOUTH[mood]}" fill="${mood === 3 ? '#4a3a32' : 'none'}" stroke="#4a3a32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const $ = (s) => document.querySelector(s);
+// 界面的明暗。每一项：样式变量、白天的颜色、夜里的颜色、是不是"字"；写成 rgb 的三个数，中间的过渡现算。
+// 名字以 -rgb 结尾的只给三个数（样式里配上各自的透明度用），--edge 另带透明度。
+// 底色在整段时间里慢慢变；字要从深色翻成浅色，翻到一半时和底色最接近、最难认，
+// 所以字只在底色变到一半的那一小段里很快翻过去
+const THEME = [
+  ['--ink', [90, 74, 64], [240, 231, 219], true],
+  ['--ink-soft', [141, 123, 110], [176, 168, 170], true],
+  ['--tint-rgb', [120, 90, 60], [255, 238, 220], true],
+  ['--good', [79, 138, 66], [163, 214, 146], true],
+  ['--warn', [185, 84, 63], [244, 164, 146], true],
+  ['--paper-rgb', [255, 249, 238], [44, 43, 64], false],
+  ['--raise-rgb', [255, 255, 255], [82, 79, 110], false],
+  ['--edge', [255, 255, 255, 0.75], [255, 255, 255, 0.12], false],
+];
+const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const THEMES = ['auto', 'light', 'dark'];
+const THEME_FADE = 5; // 入夜、天亮时界面换颜色用几秒
+const THEME_QUICK = 0.5; // 玩家自己在设置里换的时候
+
 // 手机的版式（和 styles.css 里那条 @media 一致）：竖着拿的窄屏，或者横着拿的矮屏
 const PHONE = '(max-width: 700px), (max-height: 500px)';
 
@@ -52,6 +71,11 @@ export class UI {
     this.unlocked = new Set();
     this.toolNames = new Map(); // 工具栏每个按钮的名字（换语言时要重新取）
     this.touch = false;
+    this.themeMode = 'auto';
+    this.themeAt = null; // 界面现在有多"夜"：0 浅色，1 深色；null 是还没定过
+    this.themeK = -1;
+    this.themeInk = -1;
+    this.themeQuick = false;
     this.phone = window.matchMedia ? window.matchMedia(PHONE) : { matches: false };
     this.openWishId = null;
     this.wishDetail = $('#wish-detail');
@@ -98,6 +122,9 @@ export class UI {
       `<option value="synth">${t('music.synth')}</option>`;
     track.value = chosen;
     this.setNowPlaying(this.nowTrack, this.nowResting);
+
+    $('#theme').innerHTML = THEMES.map((m) => `<option value="${m}">${t(`theme.${m}`)}</option>`).join('');
+    $('#theme').value = this.themeMode;
 
     const lang = getLang();
     $('#lang').value = lang;
@@ -252,9 +279,21 @@ export class UI {
   setAim(s) {
     if (!s) {
       this.aimBar.hidden = true;
+      this.aimKey = '';
+      clearTimeout(this.aimTimer);
       return;
     }
     this.aimBar.hidden = false;
+    // 只有一句提示、没有按钮的时候：露两秒就慢慢淡出，不一直挡着小岛。换了一句话会重新露出来
+    const plain = !s.rot && !s.cancel && !s.ok;
+    const key = `${plain ? 1 : 0}${s.text}`;
+    if (key !== this.aimKey) {
+      this.aimKey = key;
+      clearTimeout(this.aimTimer);
+      this.aimBar.classList.remove('fade');
+      this.aimBar.classList.toggle('plain', plain);
+      if (plain) this.aimTimer = setTimeout(() => this.aimBar.classList.add('fade'), 2000);
+    }
     if (this.aimText.textContent !== s.text) this.aimText.textContent = s.text;
     this.aimBar.classList.toggle('bad', !!s.bad);
     this.aimRot.hidden = !s.rot;
@@ -326,6 +365,18 @@ export class UI {
     $('#vol-sfx').addEventListener('change', () => this.h.clickSound());
     $('#ico-fps').innerHTML = ICON.gauge;
     $('#ico-lang').innerHTML = ICON.globe;
+    $('#ico-theme').innerHTML = ICON.moon;
+    // 界面明暗：跟着游戏里的昼夜，或者固定浅色、深色。选项在 applyLang 里填
+    $('#theme').addEventListener('change', (e) => {
+      this.h.clickSound();
+      this.h.setTheme(e.target.value);
+    });
+    // 弹窗后面的暗幕：点一下就把弹窗关掉
+    $('#scrim').addEventListener('click', () => {
+      $('#feedback').hidden = true;
+      $('#credits').hidden = true;
+      this.setFeedbackMsg('');
+    });
     $('#btn-next').innerHTML = ICON.next;
     // 曲目：随机轮播、指定一首单曲循环，或者换回合成音乐。选项在 applyLang 里填
     $('#track').addEventListener('change', (e) => {
@@ -411,6 +462,40 @@ export class UI {
     const el = $('#now-playing');
     el.textContent = track ? t('music.now', track.title, track.by) : resting ? t('music.rest') : '';
     el.hidden = !el.textContent;
+  }
+
+  // 界面明暗选了哪种。quick：玩家刚在设置里换的，很快换过去，不用等几秒
+  setThemeMode(mode, quick = false) {
+    this.themeMode = THEMES.includes(mode) ? mode : 'auto';
+    this.themeQuick = quick;
+    $('#theme').value = this.themeMode;
+  }
+
+  // 每帧调用。night：场景现在有多暗（0 白天，1 深夜）。
+  // 天黑过半以后界面在几秒钟里从浅色换成深色，天亮时再换回来；不是一直跟着天色变，
+  // 因为底色和字的颜色换到一半的时候最难认，那一段要尽快过去
+  updateTheme(night, dt) {
+    const goal = this.themeMode === 'dark' ? 1 : this.themeMode === 'light' ? 0 : night > 0.5 ? 1 : 0;
+    if (this.themeAt === goal) return;
+    const step = Math.min(dt, 0.1) / (this.themeQuick ? THEME_QUICK : THEME_FADE);
+    if (this.themeAt === null) this.themeAt = goal;
+    else this.themeAt = goal > this.themeAt ? Math.min(goal, this.themeAt + step) : Math.max(goal, this.themeAt - step);
+    const a = this.themeAt;
+    if (a === goal) this.themeQuick = false;
+    const k = ease(a);
+    const ink = ease((a - 0.44) / 0.12);
+    // 颜色差得很少的时候不去动样式，省得每一帧都重排一遍界面
+    if (a !== goal && Math.abs(k - this.themeK) < 0.03 && Math.abs(ink - this.themeInk) < 0.03) return;
+    this.themeK = k;
+    this.themeInk = ink;
+    const root = document.documentElement;
+    for (const [name, day, dark, isInk] of THEME) {
+      const f = isInk ? ink : k;
+      const v = day.map((d, i) => (i < 3 ? Math.round(d + (dark[i] - d) * f) : +(d + (dark[i] - d) * f).toFixed(3)));
+      root.style.setProperty(name, name.endsWith('-rgb') ? v.join(', ') : `${v.length > 3 ? 'rgba' : 'rgb'}(${v.join(', ')})`);
+    }
+    // 滑杆、选单这些浏览器自带的控件也跟着换
+    root.style.colorScheme = a > 0.5 ? 'dark' : 'light';
   }
 
   // 帧率上限选了哪个、要不要在角落显示实际帧率
