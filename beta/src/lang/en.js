@@ -387,7 +387,7 @@ dict['tut.dock'] = [
   [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
   [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows above the bar turn the camera. Use ↻ to rotate a piece before placing it. Move, Remove, Undo and Redo sit at one end of the bar. If you hold your phone in your left hand, switch to Left in Settings.'],
   dict.tut[2],
-  [dict.tut[3][0], "The faces above the bar are your residents. Tap one to see their wish; it tucks itself away after a few seconds. Watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
+  [dict.tut[3][0], "The faces above the bar are your residents. Tap one and their wish appears at the top of the screen, then tucks itself away after a few seconds. Watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
   dict.tut[4],
 ];
 dict['tut.touch'] = [

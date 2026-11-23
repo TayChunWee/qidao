@@ -175,7 +175,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 /* 手机上点头像展开的愿望；电脑上卡片本身就是展开的，用不到 */
 #wish-detail { display: none; }
-#wish-detail.fade { opacity: 0; transition: opacity 2s; }
+#wish-detail.fade { opacity: 0; transition: opacity 0.9s; }
 #pr-num-s { display: none; }
 
 /* ---------- 繁荣度 ---------- */
@@ -409,6 +409,11 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
 #tooltip.show { opacity: 1; transform: none; }
 #tooltip b { display: block; font-size: 14px; }
 #tooltip span { font-size: 12px; color: var(--ink-soft); }
+#tooltip .how { display: block; margin-top: 3px; font-weight: 700; color: var(--accent-deep); }
+/* 触屏上的说明气泡会盖在头像那一排上面：要压得住，淡出慢一点 */
+body.touch #tooltip { z-index: 2; max-width: min(320px, calc(100% - 16px)); background: rgba(var(--paper-rgb), 0.97); transition: opacity 0.5s, transform 0.2s var(--spring); }
+body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--spring); }
+#aim-text:empty { display: none; }
 
 /* ---------- 提示 ---------- */
 
@@ -582,9 +587,10 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   #toolbar-wrap { bottom: 8px; padding: 0 8px; gap: 5px; }
   .tab { padding: 5px 18px; }
   #toolbar { width: 100%; max-width: 620px; align-items: center; gap: 0; padding: 6px 8px; border-radius: 22px; }
-  #tool-list { flex: 1; min-width: 0; align-items: flex-end; gap: 2px; padding: 9px 2px 1px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  #tool-list { flex: 1; min-width: 0; align-items: flex-end; gap: 2px; padding: 8px 4px 3px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   #tool-list::-webkit-scrollbar { display: none; }
   .tool { flex: none; }
+  .tool.on { transform: translateY(-3px); }
   .tool .name { display: block; font-size: 11px; }
   .tb-sep { margin: 4px 7px; }
   #acts { display: grid; grid-template-columns: repeat(2, 38px); gap: 2px; }
@@ -611,22 +617,32 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   /* ---- 单手版式（竖着拿，ui.js 给 body 加上 dock）：常点的东西都在屏幕下半，拇指够得着 ----
      从下往上：工具栏；分页和转镜头的两个按钮；居民头像；提示条；点头像弹出的愿望。
      右手模式下头像和转镜头按钮靠右，左手模式靠左 */
+  body.dock { --tool: 58px; }
+  body.dock .tool img { width: calc(var(--tool) - 8px); height: calc(var(--tool) - 8px); }
   body.dock #prosper { max-width: calc(100% - 146px); }
-  body.dock #tabrow { width: 100%; max-width: 620px; justify-content: space-between; padding: 0 2px; }
-  body.dock #cams { display: flex; gap: 8px; pointer-events: auto; }
+  /* 分页那一排分三格：分页在正中，转镜头的按钮在靠手的一格。
+     摆东西时的确认、转向、取消占另外两格，这时分页暂时让开 */
+  body.dock #tabrow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%; max-width: 620px; min-height: 42px; padding: 0 2px; }
+  body.dock #tabs { grid-column: 2; grid-row: 1; }
+  body.dock #cams { grid-column: 3; grid-row: 1; justify-self: end; display: flex; gap: 8px; pointer-events: auto; }
+  body.dock #aimbar { grid-column: 1 / 3; grid-row: 1; justify-self: end; width: auto; max-width: calc(100% - 8px); margin-right: 8px; padding-left: 5px; font-size: 12px; }
+  body.dock #aim-text { padding: 0 2px 0 9px; }
+  body.dock #aimbar:not([hidden]):not(.fade) ~ #tabs { visibility: hidden; }
+  body.dock.hand-left #cams { grid-column: 1; justify-self: start; }
+  body.dock.hand-left #aimbar { grid-column: 2 / 4; justify-self: start; flex-direction: row-reverse; margin: 0 0 0 8px; padding: 4px 5px; }
+  body.dock.hand-left #aim-text { padding: 0 9px 0 2px; }
   body.dock #cams .icon-btn {
     width: 40px; height: 40px; border-radius: 50%; color: var(--ink); background: rgba(var(--paper-rgb), 0.86); border: 1px solid var(--edge);
     box-shadow: 0 3px 10px rgba(90, 60, 40, 0.14); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   }
   body.dock #wishes { position: static; width: 100%; max-width: 620px; padding: 4px 2px 6px; direction: rtl; }
   body.dock #wishes > * { direction: ltr; }
-  body.dock #wish-detail { position: static; width: 100%; max-width: 420px; }
-  body.dock.hand-left #tabrow { flex-direction: row-reverse; }
+  /* 点头像弹出的愿望在屏幕上方，等级那一排的下面 */
+  body.dock #wish-detail { top: 54px; }
   body.dock.hand-left #wishes { direction: ltr; }
-  /* 屏幕下半让给了按钮，上半空出来：一闪而过的提示和说明都放到上面，不会被拿手机的手挡住 */
-  body.dock #toast { top: 58px; bottom: auto; }
-  body.dock #tutorial { top: 104px; bottom: auto; }
-  body.dock #levelup { padding-top: 104px; }
+  /* 一闪而过的提示浮在头像那一排上面，不挤别的东西；操作说明放在愿望卡片的下面 */
+  body.dock #toast { top: auto; bottom: 100%; margin-bottom: 8px; }
+  body.dock #tutorial { top: 146px; bottom: auto; }
   /* 输入框放在上半屏，弹出键盘时不会被挡住 */
   #feedback { top: 8px; transform: translateX(-50%); animation: none; max-height: calc(100% - 16px); }
   #credits { max-height: calc(100% - 16px); }

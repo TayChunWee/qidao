@@ -538,9 +538,13 @@ export class Game {
     if (fromUi || this.started) this.audio.click();
     this.aim = null;
     this.pickKey = '';
-    this.ui.setAim(null); // 换了工具，上面那条提示重新露一次
-    // 触屏上没有"鼠标移上去看说明"，选中模块时把说明弹出来
-    if (this.touch && m && this.tool && this.started) this.ui.toast(descOf(id, true), 3.2);
+    this.ui.setAim(null);
+    // 触屏上没有"鼠标移上去看说明"：选中的时候在按钮上方弹出说明和用法，几秒后自己淡出
+    if (this.touch && this.started) {
+      if (!this.tool) this.ui.hideTip();
+      else if (m) this.ui.showTip(id, descOf(id, true), t(m.paint ? 'aim.paint' : 'aim.tap'));
+      else this.ui.showTip(id, '', t(id === 'move' ? 'aim.box' : 'aim.remove'));
+    }
     this.refreshHover();
   }
 
@@ -918,7 +922,7 @@ export class Game {
     this.refreshProsperity();
     this.ui.setUndoState(this.undoStack.length > 0, this.redoStack.length > 0);
     this.audio.setIntensity(this.world.count());
-    this.hoverKey = '';
+    this.hoverKey = null; // 不等于任何落点（包括"没有落点"）：下面这一步一定会把预览重算或收起
     this.refreshHover();
     this.queueSave();
   }
@@ -1152,6 +1156,7 @@ export class Game {
   touchDown(e) {
     const ps = this.pointers;
     ps.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    this.ui.hideTip();
     if (ps.size === 1) {
       this.tap = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
       if (this.tool === 'move') {
@@ -1293,18 +1298,18 @@ export class Game {
       if (d && d.mode === 'box') this.ui.setAim({ text: `${s.x1 - s.x0 + 1} × ${s.z1 - s.z0 + 1}` });
       else if (d) this.ui.setAim({ text: !d.valid ? d.reason : d.dx || d.dz ? t('aim.drop') : t('aim.dragSel'), bad: !d.valid });
       else if (s) this.ui.setAim({ text: t('aim.dragSel'), rot: true, cancel: true });
-      else this.ui.setAim({ text: t('aim.box') });
+      else this.ui.setAim(null); // 还没圈：怎么圈已经在选中时的气泡里说过了
       return;
     }
     const h = this.aim ? this.hover : null;
     if (!h) {
-      this.ui.setAim({ text: t(tool === 'remove' ? 'aim.remove' : MOD[tool].paint ? 'aim.paint' : 'aim.tap') });
+      this.ui.setAim(null);
       return;
     }
     const place = h.kind === 'place';
     const info = this.hoverText(h);
     const text = h.valid ? `${info ? `${info} · ` : ''}${t(place ? 'aim.again' : 'aim.againRemove')}` : info;
-    this.ui.setAim({ text, bad: !h.valid, rot: !!h.rot, ok: t(place ? 'aim.ok' : 'aim.okRemove'), cancel: true });
+    this.ui.setAim({ text, short: info, bad: !h.valid, rot: !!h.rot, ok: t(place ? 'aim.ok' : 'aim.okRemove'), cancel: true });
   }
 
   // ---------- 每帧 ----------

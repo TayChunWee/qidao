@@ -83,6 +83,7 @@ export class UI {
     this.phone = window.matchMedia ? window.matchMedia(PHONE) : { matches: false };
     this.land = window.matchMedia ? window.matchMedia(LANDSCAPE) : { matches: false };
     this.dock = false; // 单手版式：头像和转镜头的按钮挪到了工具栏上方
+    this.lastAim = null;
     this.hand = 'right';
     this.hzPeak = 0;
     this.chrome = '';
@@ -234,7 +235,33 @@ export class UI {
       this.tooltip.style.bottom = `${window.innerHeight - top + 10}px`;
       this.tooltip.classList.add('show');
     });
-    el.addEventListener('pointerleave', () => this.tooltip.classList.remove('show'));
+    el.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') this.tooltip.classList.remove('show'); // 手指抬起不算"移开"：触屏的说明由 showTip 自己计时收起
+    });
+  }
+
+  // 触屏上选中一个模块或工具：在它上方弹出名字、说明和用法，三秒后淡出；手指一碰小岛也会收起
+  showTip(id, desc, how) {
+    const el = this.toolEls.get(id);
+    if (!el) return;
+    this.tooltip.innerHTML = `<b>${this.toolNames.get(id)()}</b>${desc ? `<span>${desc}</span>` : ''}${how ? `<span class="how">${how}</span>` : ''}`;
+    const r = el.getBoundingClientRect();
+    const w = this.tooltip.offsetWidth;
+    const x = Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
+    // 贴在分页那一排的上面：单手版式里正好盖住头像那一排，不再多占小岛的画面
+    const top = Math.min(r.top, $('#tabrow').getBoundingClientRect().top);
+    const box = $('#ui').getBoundingClientRect();
+    this.tooltip.style.left = `${x - box.left}px`;
+    this.tooltip.style.bottom = `${box.bottom - top + 6}px`;
+    this.tooltip.classList.add('show');
+    clearTimeout(this.tipTimer);
+    this.tipTimer = setTimeout(() => this.tooltip.classList.remove('show'), 3000);
+  }
+
+  hideTip() {
+    if (!this.touch) return;
+    clearTimeout(this.tipTimer);
+    this.tooltip.classList.remove('show');
   }
 
   setThumbs(map) {
@@ -290,6 +317,7 @@ export class UI {
 
   // 工具栏上方的那一条。s 为空就收起；text 一句话，bad 标红，rot、cancel 要不要转向和取消按钮，ok 是确认按钮上的字
   setAim(s) {
+    this.lastAim = s;
     if (!s) {
       this.aimBar.hidden = true;
       this.aimKey = '';
@@ -307,11 +335,14 @@ export class UI {
       this.aimBar.classList.toggle('plain', plain);
       if (plain) this.aimTimer = setTimeout(() => this.aimBar.classList.add('fade'), 2000);
     }
-    if (this.aimText.textContent !== s.text) this.aimText.textContent = s.text;
+    // 单手版式里这一条挤在分页那一排，地方小：有按钮的时候只留要紧的字（放不下的原因、朝向、第几层），
+    // "再点一次放下"由按钮自己说；放不下的时候确认按钮也收起
+    const text = this.dock && s.short !== undefined ? s.short : s.text;
+    if (this.aimText.textContent !== text) this.aimText.textContent = text;
     this.aimBar.classList.toggle('bad', !!s.bad);
     this.aimRot.hidden = !s.rot;
     this.aimNo.hidden = !s.cancel;
-    this.aimOk.hidden = !s.ok;
+    this.aimOk.hidden = !s.ok || (this.dock && !!s.bad);
     if (s.ok) this.aimOk.lastChild.textContent = s.ok;
   }
 
@@ -323,19 +354,24 @@ export class UI {
       this.dock = dock;
       document.body.classList.toggle('dock', dock);
       const cams = [$('#cam-left'), $('#cam-right')];
+      const wrap = $('#toolbar-wrap');
+      const row = $('#tabrow');
       if (dock) {
-        const wrap = $('#toolbar-wrap');
-        wrap.insertBefore(this.wishDetail, this.aimBar);
-        wrap.insertBefore(this.wishBox, $('#tabrow'));
+        wrap.insertBefore(this.toastEl, row);
+        wrap.insertBefore(this.wishBox, row);
+        row.insertBefore(this.aimBar, row.firstChild); // 确认、转向、取消这几个按钮并进分页那一排，不另占一行
         for (const b of cams) $('#cams').appendChild(b);
       } else {
         const ui = $('#ui');
-        ui.insertBefore(this.wishDetail, ui.firstChild);
         ui.insertBefore(this.wishBox, this.wishDetail);
+        ui.insertBefore(this.toastEl, this.hint.nextSibling);
+        wrap.insertBefore(this.aimBar, row);
         const pill = $('#topbar .pill');
         pill.insertBefore(cams[1], pill.firstChild);
         pill.insertBefore(cams[0], cams[1]);
       }
+      this.aimKey = '';
+      if (this.lastAim) this.setAim(this.lastAim);
     }
     this.renderWishDetail();
     if (this.tutRender) this.tutRender();
@@ -348,7 +384,7 @@ export class UI {
     for (const b of $('#hand-seg').children) b.classList.toggle('on', b.dataset.hand === this.hand);
   }
 
-  // 手机上居民只显示头像，点一下展开他的愿望；露两秒后慢慢淡出、自己收起，不一直挡着小岛。id 为空就收起
+  // 手机上居民只显示头像，点一下在屏幕上方展开他的愿望；露三秒后淡出、自己收起，不一直挡着小岛。id 为空就收起
   openWish(id) {
     this.openWishId = id;
     clearTimeout(this.wishTimer);
@@ -357,8 +393,8 @@ export class UI {
     if (!id || !this.phone.matches) return;
     this.wishTimer = setTimeout(() => {
       this.wishDetail.classList.add('fade');
-      this.wishTimer = setTimeout(() => this.openWish(null), 2000);
-    }, 2000);
+      this.wishTimer = setTimeout(() => this.openWish(null), 900);
+    }, 3000);
   }
 
   renderWishDetail() {
