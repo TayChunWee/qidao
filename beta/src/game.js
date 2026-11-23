@@ -70,7 +70,7 @@ export class Game {
     this.done = false;
 
     // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
-    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', tutorialDone: false, growthTipDone: false };
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
@@ -126,6 +126,11 @@ export class Game {
         this.ui.setFpsChoice(this.settings.fps, on);
         this.saveSettings();
       },
+      setHand: (hand) => {
+        this.settings.hand = hand;
+        this.ui.setHand(hand);
+        this.saveSettings();
+      },
       setTheme: (mode) => {
         this.settings.theme = mode;
         this.ui.setThemeMode(mode, true);
@@ -144,6 +149,7 @@ export class Game {
     this.ui.setTrack(this.settings.track);
     this.ui.setFpsChoice(this.settings.fps, this.settings.showFps);
     this.ui.setThemeMode(this.settings.theme);
+    this.ui.setHand(this.settings.hand);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
 
@@ -259,7 +265,7 @@ export class Game {
     return [
       `版本 ${VERSION}，语言 ${getLang()}`,
       `小岛 ${this.level + 1} 级，繁荣度 ${this.prosperity}，建造规模 ${this.world.count()}`,
-      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}，界面 ${this.settings.theme}`,
+      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}，界面 ${this.settings.theme}，${this.ui.dock ? `单手版式 ${this.settings.hand}` : '非单手版式'}`,
       `窗口 ${window.innerWidth}×${window.innerHeight}（像素比 ${window.devicePixelRatio}）`,
       navigator.userAgent,
     ].join('\n');
@@ -1337,6 +1343,7 @@ export class Game {
     if (this.clockTimer <= 0) {
       this.clockTimer = 0.25;
       this.ui.setClock(this.t, this.view.isDay);
+      this.ui.setChrome(`#${this.view.scene.background.getHexString()}`);
     }
     // 镜头在动的时候，鼠标没动也要更新落点
     if (!this.touch && this.mouse && this.mouse.inside && this.tool && !this.drag && Math.abs(this.view.az - this.view.azGoal) > 0.002) this.refreshHover();

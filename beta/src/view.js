@@ -9,6 +9,7 @@ import { Anim, ease } from './anim.js';
 const ELEV = THREE.MathUtils.degToRad(34);
 const CAM_DIST = 60;
 const VIEW_H = 15.5; // 缩放为 1 时竖直方向可见的世界单位
+const ZOOM_MAX = 2.8; // 最多放大到几倍（宽屏上）
 const HALF_SIZE = SIZE / 2;
 const PAN_LIMIT = HALF_SIZE;
 const RISE_DEPTH = -0.95; // 新陆地从多深的地方升上来
@@ -138,6 +139,7 @@ export class View {
     this.azGoal = this.az;
     this.zoom = FRAMES[0].zoom;
     this.zoomGoal = this.zoom;
+    this.zoomMax = ZOOM_MAX;
     this.target = new THREE.Vector3(FRAMES[0].x, 0.7, FRAMES[0].z);
     this.targetGoal = this.target.clone();
     this.frame = FRAMES[0];
@@ -443,6 +445,10 @@ export class View {
     // 窗口很窄时保证整座岛都在画面里
     const vh = Math.max(VIEW_H, 21 / aspect);
     this.viewH = vh;
+    // 竖着拿的手机为了装下整座岛，画面本来就缩小了好几倍；放大的上限跟着抬高，
+    // 放到最大时房子在屏幕上和电脑上差不多大
+    this.zoomMax = ZOOM_MAX * Math.min(2.5, vh / VIEW_H);
+    this.zoomGoal = Math.min(this.zoomGoal, this.zoomMax);
     this.camera.left = (-vh * aspect) / 2;
     this.camera.right = (vh * aspect) / 2;
     this.camera.top = vh / 2;
@@ -471,12 +477,12 @@ export class View {
   }
 
   zoomBy(delta) {
-    this.zoomGoal = Math.min(2.8, Math.max(0.5, this.zoomGoal * Math.exp(-delta * 0.0012)));
+    this.zoomGoal = Math.min(this.zoomMax, Math.max(0.5, this.zoomGoal * Math.exp(-delta * 0.0012)));
   }
 
   // 双指捏合：按两指间距变化的倍数缩放
   zoomScale(f) {
-    this.zoomGoal = Math.min(2.8, Math.max(0.5, this.zoomGoal * f));
+    this.zoomGoal = Math.min(this.zoomMax, Math.max(0.5, this.zoomGoal * f));
   }
 
   pan(dx, dy) {

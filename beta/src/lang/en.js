@@ -117,6 +117,9 @@ const dict = {
   'set.fps': 'Max FPS',
   'set.lang': 'Language',
   'set.theme': 'Theme',
+  'set.hand': 'Hand',
+  'hand.left': 'Left',
+  'hand.right': 'Right',
   'theme.auto': 'Follow day and night',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
@@ -149,7 +152,7 @@ const dict = {
   'fb.pick': 'Please pick a type at the top first',
   'fb.short': 'Please write a little more',
   'fb.wait': 'You just sent one. Please wait a moment.',
-  'set.fpsNote': (hz) => `This screen refreshes about ${hz} times a second, so FPS tops out at ${hz}`,
+  'set.fpsNote': (hz) => `The browser refreshes at most ${hz} times a second on this screen, so FPS tops out at ${hz}`,
   'music.shuffle': 'Shuffle',
   'music.synth': 'Original synth music',
   'music.next': 'Next track',
@@ -379,6 +382,14 @@ for (const [id, v] of Object.entries(DESC)) dict[`desc.${id}`] = v;
 for (const [id, v] of Object.entries(RES)) ['name', 'wish', 'ask', 'almost', 'happy'].forEach((k, i) => (dict[`res.${id}.${k}`] = v[i]));
 
 // 触屏版的新手提示：标题和电脑版一样，提到键盘鼠标的几步换了说法
+// One-handed layout for a phone held upright: faces and camera buttons sit above the bar
+dict['tut.dock'] = [
+  [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
+  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows above the bar turn the camera. Use ↻ to rotate a piece before placing it. Move, Remove, Undo and Redo sit at one end of the bar. If you hold your phone in your left hand, switch to Left in Settings.'],
+  dict.tut[2],
+  [dict.tut[3][0], "The faces above the bar are your residents. Tap one to see their wish; it tucks itself away after a few seconds. Watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
+  dict.tut[4],
+];
 dict['tut.touch'] = [
   [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
   [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows at the top right turn the camera. Use ↻ to rotate a piece before placing it. Move, Remove, Undo and Redo sit at the right end of the bar.'],

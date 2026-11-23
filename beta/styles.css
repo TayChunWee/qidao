@@ -175,6 +175,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 /* 手机上点头像展开的愿望；电脑上卡片本身就是展开的，用不到 */
 #wish-detail { display: none; }
+#wish-detail.fade { opacity: 0; transition: opacity 2s; }
 #pr-num-s { display: none; }
 
 /* ---------- 繁荣度 ---------- */
@@ -238,6 +239,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 #settings { position: absolute; right: 16px; top: 72px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; width: var(--set-w); }
 #settings[hidden] { display: none; }
+#settings { z-index: 4; }
+/* 设置开着的时候垫一层看不见的幕：点设置以外的地方就把它关掉，这一下不会落到小岛上 */
+#shade { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 3; pointer-events: auto; }
+#settings:not([hidden]) ~ #shade { display: block; }
+/* 只在手机版式里出现的设置项 */
+.s-row.phone-only { display: none; }
 #settings label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 #settings label span:nth-child(2) { flex: none; width: var(--set-label); }
 .s-icon { display: grid; flex: none; width: 20px; color: var(--ink-soft); }
@@ -311,6 +318,8 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
 #toolbar-wrap { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 10px; }
 
 /* 工具栏上面的分页 */
+#tabrow { display: flex; align-items: center; }
+#cams { display: none; }
 #tabs { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
 .tab {
   position: relative; padding: 3px 18px; border-radius: 13px; font-size: 13px; font-weight: 700; color: var(--ink-soft);
@@ -530,7 +539,7 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   .icon-btn { width: 32px; height: 32px; }
   #prosper { left: 8px; right: auto; top: 8px; transform: none; width: auto; max-width: calc(100% - 212px); height: 40px; padding: 0 12px; display: flex; align-items: center; border-radius: 18px; }
   #prosper.bump { animation: none; }
-  .pr-row { gap: 7px; }
+  .pr-row { gap: 7px; flex: 1; min-width: 0; }
   .pr-lv { font-size: 13px; }
   .pr-bar { min-width: 0; width: 34px; flex: 0 1 34px; }
   .pr-next, #pr-num { display: none; }
@@ -595,6 +604,29 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   .bubble { max-width: 190px; font-size: 12px; }
 
   #settings { right: 8px; top: 54px; max-width: calc(100% - 16px); max-height: calc(100% - 62px); overflow-y: auto; overscroll-behavior: contain; }
+  .s-row.phone-only { display: flex; }
+  /* 左手模式：搬动、拆除、撤销、重做换到工具栏左边 */
+  body.hand-left #toolbar { flex-direction: row-reverse; }
+
+  /* ---- 单手版式（竖着拿，ui.js 给 body 加上 dock）：常点的东西都在屏幕下半，拇指够得着 ----
+     从下往上：工具栏；分页和转镜头的两个按钮；居民头像；提示条；点头像弹出的愿望。
+     右手模式下头像和转镜头按钮靠右，左手模式靠左 */
+  body.dock #prosper { max-width: calc(100% - 146px); }
+  body.dock #tabrow { width: 100%; max-width: 620px; justify-content: space-between; padding: 0 2px; }
+  body.dock #cams { display: flex; gap: 8px; pointer-events: auto; }
+  body.dock #cams .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; color: var(--ink); background: rgba(var(--paper-rgb), 0.86); border: 1px solid var(--edge);
+    box-shadow: 0 3px 10px rgba(90, 60, 40, 0.14); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  body.dock #wishes { position: static; width: 100%; max-width: 620px; padding: 4px 2px 6px; direction: rtl; }
+  body.dock #wishes > * { direction: ltr; }
+  body.dock #wish-detail { position: static; width: 100%; max-width: 420px; }
+  body.dock.hand-left #tabrow { flex-direction: row-reverse; }
+  body.dock.hand-left #wishes { direction: ltr; }
+  /* 屏幕下半让给了按钮，上半空出来：一闪而过的提示和说明都放到上面，不会被拿手机的手挡住 */
+  body.dock #toast { top: 58px; bottom: auto; }
+  body.dock #tutorial { top: 104px; bottom: auto; }
+  body.dock #levelup { padding-top: 104px; }
   /* 输入框放在上半屏，弹出键盘时不会被挡住 */
   #feedback { top: 8px; transform: translateX(-50%); animation: none; max-height: calc(100% - 16px); }
   #credits { max-height: calc(100% - 16px); }
