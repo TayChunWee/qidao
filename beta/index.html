@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#84cfdd">
+<title>栖岛</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+
+<div id="ui">
+  <section id="wishes"></section>
+  <div class="panel" id="wish-detail" hidden></div>
+
+  <div class="panel" id="prosper" data-i18n-title="top.prosper">
+    <div class="pr-row">
+      <span class="pr-lv" id="pr-lv"></span>
+      <span class="pr-bar"><i id="pr-fill"></i></span>
+      <span class="pr-num" id="pr-num"></span>
+      <span class="pr-num" id="pr-num-s"></span>
+      <span class="pr-delta" id="pr-delta"></span>
+    </div>
+    <div class="pr-next" id="pr-next"></div>
+  </div>
+
+  <section id="topbar">
+    <div class="panel clock" id="clock">
+      <span class="clock-icon" id="clock-icon"></span>
+      <span class="clock-text" id="clock-text"></span>
+    </div>
+    <div class="panel compass" id="compass" data-i18n-title="top.compass">
+      <div class="dial" id="dial">
+        <span class="n" data-i18n="compass.0"></span><span class="e" data-i18n="compass.1"></span><span class="s" data-i18n="compass.2"></span><span class="w" data-i18n="compass.3"></span>
+        <i class="sun-dot" id="sun-dot"></i>
+      </div>
+    </div>
+    <div class="panel pill">
+      <button class="icon-btn" id="cam-left" data-i18n-title="top.camLeft"></button>
+      <button class="icon-btn" id="cam-right" data-i18n-title="top.camRight"></button>
+      <span class="sep"></span>
+      <button class="icon-btn" id="btn-help" data-i18n-title="top.help"></button>
+      <button class="icon-btn" id="btn-settings" data-i18n-title="top.settings"></button>
+    </div>
+  </section>
+
+  <div class="panel" id="settings" hidden>
+    <label><span class="s-icon" id="ico-music"></span><span data-i18n="set.music"></span><input type="range" id="vol-music" min="0" max="100" value="70"></label>
+    <div class="s-row"><span class="s-icon"></span><span data-i18n="set.track"></span><select id="track"></select><button class="icon-btn mini" id="btn-next" data-i18n-title="music.next"></button></div>
+    <div class="s-note" id="now-playing" hidden></div>
+    <label><span class="s-icon" id="ico-sfx"></span><span data-i18n="set.sfx"></span><input type="range" id="vol-sfx" min="0" max="100" value="80"></label>
+    <div class="s-row"><span class="s-icon" id="ico-fps"></span><span data-i18n="set.fps"></span><div class="seg" id="fps-seg"></div></div>
+    <div class="s-note" id="fps-note" hidden></div>
+    <label class="s-check"><input type="checkbox" id="show-fps"><span data-i18n="set.showFps"></span></label>
+    <div class="s-row"><span class="s-icon" id="ico-lang"></span><span data-i18n="set.lang"></span><select id="lang"></select></div>
+    <div class="s-btns">
+      <button class="text-btn plain" id="btn-feedback" data-i18n="set.feedback" hidden></button>
+      <button class="text-btn plain" id="btn-credits" data-i18n="set.credits"></button>
+    </div>
+    <button class="text-btn" id="btn-reset"></button>
+  </div>
+
+  <div id="bubbles"></div>
+  <div id="hint"></div>
+  <div id="toast"></div>
+  <div id="fps" hidden></div>
+  <div class="panel" id="tooltip"></div>
+  <div class="panel" id="tutorial" hidden></div>
+  <div class="panel" id="feedback" hidden>
+    <h3 data-i18n="fb.title"></h3>
+    <div class="seg" id="fb-kind"></div>
+    <textarea id="fb-text" rows="5" data-i18n-ph="fb.text"></textarea>
+    <input type="email" id="fb-contact" maxlength="120" autocomplete="email" data-i18n-ph="fb.contact">
+    <p class="s-note" data-i18n="fb.note"></p>
+    <div class="tut-foot"><span class="fb-msg" id="fb-msg"></span><button class="tut-skip" id="fb-cancel" data-i18n="fb.cancel"></button><button class="tut-next" id="fb-send" data-i18n="fb.send"></button></div>
+  </div>
+  <div class="panel" id="credits" hidden>
+    <h3 data-i18n="cr.title"></h3>
+    <div class="cr-body" id="cr-body"></div>
+    <div class="tut-foot"><span class="fb-msg" id="cr-ver"></span><button class="tut-next" id="cr-close" data-i18n="cr.close"></button></div>
+  </div>
+  <div id="levelup"></div>
+
+  <section id="toolbar-wrap">
+    <div id="aimbar" hidden>
+      <span id="aim-text"></span>
+      <button class="aim-btn" id="aim-rot" data-i18n-title="aim.rot"></button>
+      <button class="aim-btn ok" id="aim-ok"></button>
+      <button class="aim-btn" id="aim-no" data-i18n-title="aim.no"></button>
+    </div>
+    <div id="tabs"></div>
+    <div class="panel" id="toolbar"><div id="tool-list"></div><span class="tb-sep"></span><div id="acts"></div></div>
+  </section>
+</div>
+
+<div id="start">
+  <div class="start-card">
+    <h1 data-i18n="logo">栖岛</h1>
+    <p class="sub" data-i18n="start.sub"></p>
+    <button id="btn-start" data-i18n="start.btn"></button>
+    <p class="tip" data-i18n="start.tip"></p>
+    <div class="langs" id="start-langs"></div>
+  </div>
+</div>
+
+<div id="fatal" hidden></div>
+
+<script>
+// 游戏的程序没能加载（断网、文件取不到、浏览器太旧）时给一句提示，免得停在只有标题的画面。
+// 这时候语言文件也没加载，所以三种语言的提示直接写在这里。
+function bootFail() {
+  var el = document.getElementById('fatal');
+  if (window.__booted || !el.hidden) return;
+  var lang = (navigator.language || '').toLowerCase();
+  el.dataset.boot = '1';
+  el.textContent =
+    lang.indexOf('zh') === 0
+      ? '游戏没能加载出来。\n请检查网络后刷新页面；还是不行的话，换用最新版的 Chrome 或 Edge 试试。'
+      : lang.indexOf('ja') === 0
+        ? 'ゲームを読み込めませんでした。\n通信状況を確認して、ページを再読み込みしてください。それでも動かない場合は、最新版の Chrome か Edge でお試しください。'
+        : "The game couldn't load.\nCheck your connection and refresh the page. If that doesn't help, try the latest Chrome or Edge.";
+  el.hidden = false;
+}
+setTimeout(bootFail, 20000);
+</script>
+<script type="module" src="src/main.js" onerror="bootFail()"></script>
+</body>
+</html>
