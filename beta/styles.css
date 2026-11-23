@@ -191,6 +191,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pr-num { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pr-delta { font-size: 12px; font-weight: 800; min-width: 0; padding: 0; border-radius: 9px; transition: opacity 0.15s; }
 .pr-delta:empty { display: none; }
+.pr-delta.pop { animation: delta-pop 1.9s ease-out both; }
+@keyframes delta-pop {
+  0% { opacity: 0; transform: translateY(7px) scale(0.7); }
+  10% { opacity: 1; transform: translateY(-2px) scale(1.18); }
+  18% { transform: none; }
+  78% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-7px); }
+}
 .pr-delta.up { padding: 1px 7px; background: rgba(121, 181, 106, 0.22); color: var(--good); }
 .pr-delta.down { padding: 1px 7px; background: rgba(217, 112, 90, 0.18); color: var(--warn); }
 .pr-next { margin-top: 3px; font-size: 12px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 0 10px; }
@@ -318,6 +326,7 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
 #toolbar-wrap { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 10px; }
 
 /* 工具栏上面的分页 */
+#people { display: none; }
 #tabrow { display: flex; align-items: center; }
 #cams { display: none; }
 #tabs { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
@@ -593,8 +602,9 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   .tool.on { transform: translateY(-3px); }
   .tool .name { display: block; font-size: 11px; }
   .tb-sep { margin: 4px 7px; }
-  #acts { display: grid; grid-template-columns: repeat(2, 38px); gap: 2px; }
-  .tool.act { width: 38px; padding: 3px 0 2px; border-radius: 12px; }
+  #acts { display: grid; grid-template-columns: 40px; gap: 2px; }
+  .tool.act[data-id="undo"], .tool.act[data-id="redo"] { display: none; }
+  .tool.act { width: 40px; padding: 3px 0 2px; border-radius: 12px; }
   .tool.act .glyph { width: 100%; height: 20px; }
   .tool.act svg { width: 19px; height: 19px; }
   #acts .name { font-size: 10px; }
@@ -619,6 +629,10 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
      右手模式下头像和转镜头按钮靠右，左手模式靠左 */
   body.dock { --tool: 58px; }
   body.dock .tool img { width: calc(var(--tool) - 8px); height: calc(var(--tool) - 8px); }
+  /* 工具栏压矮一点，给小岛多留些地方 */
+  body.dock #toolbar { padding: 4px 8px; }
+  body.dock #tool-list { padding: 6px 4px 2px; }
+  body.dock .tool:not(.act) { padding: 2px 0 3px; }
   body.dock #prosper { max-width: calc(100% - 146px); }
   /* 分页那一排分三格：分页在正中，转镜头的按钮在靠手的一格。
      摆东西时的确认、转向、取消占另外两格，这时分页暂时让开 */
@@ -635,8 +649,17 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
     width: 40px; height: 40px; border-radius: 50%; color: var(--ink); background: rgba(var(--paper-rgb), 0.86); border: 1px solid var(--edge);
     box-shadow: 0 3px 10px rgba(90, 60, 40, 0.14); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   }
-  body.dock #wishes { position: static; width: 100%; max-width: 620px; padding: 4px 2px 6px; direction: rtl; }
+  /* 头像那一排：居民数固定在不靠手的一头，头像在剩下的地方左右滑 */
+  body.dock #people { display: flex; align-items: center; gap: 6px; width: 100%; max-width: 620px; padding: 0 2px; }
+  body.dock #people > .arrival { flex: none; order: 0; align-self: center; padding: 4px 10px; }
+  body.dock #people > .arrival span { display: none; }
+  body.dock.hand-left #people { flex-direction: row-reverse; }
+  body.dock #wishes { position: static; flex: 1; min-width: 0; width: auto; padding: 3px 0 5px; direction: rtl; }
   body.dock #wishes > * { direction: ltr; }
+  body.dock #wishes .wish, body.dock #wishes .wish.compact { gap: 3px; padding: 3px 4px 5px; border-radius: 15px; }
+  body.dock #wishes .avatar { width: 30px; height: 30px; }
+  body.dock #wishes .avatar svg { width: 24px; height: 24px; }
+  body.dock #wishes .pips i { width: 5px; height: 5px; }
   /* 点头像弹出的愿望在屏幕上方，等级那一排的下面 */
   body.dock #wish-detail { top: 54px; }
   body.dock.hand-left #wishes { direction: ltr; }

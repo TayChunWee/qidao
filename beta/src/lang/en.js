@@ -236,7 +236,9 @@ const dict = {
   'aim.again': 'Tap again to place',
   'aim.againRemove': 'Tap again to remove',
   'aim.box': 'Drag across the things you want to move',
-  'aim.dragSel': 'Drag the boxed area to move it, or ↻ to turn it',
+  'aim.dragSel': 'Drag to move, ↻ to turn, then tap Confirm',
+  'aim.confirm': 'Confirm',
+  'toast.pend': 'Drag the boxed area to move it and ↻ to turn it. Nothing changes until you tap Confirm',
   'aim.drop': 'Lift your finger to drop',
   'aim.ok': 'Place',
   'aim.okRemove': 'Remove',
@@ -385,14 +387,14 @@ for (const [id, v] of Object.entries(RES)) ['name', 'wish', 'ask', 'almost', 'ha
 // One-handed layout for a phone held upright: faces and camera buttons sit above the bar
 dict['tut.dock'] = [
   [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
-  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows above the bar turn the camera. Use ↻ to rotate a piece before placing it. Move, Remove, Undo and Redo sit at one end of the bar. If you hold your phone in your left hand, switch to Left in Settings.'],
+  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows above the bar turn the camera. Use ↻ to rotate a piece before placing it. Move and Remove sit at one end of the bar. If you hold your phone in your left hand, switch to Left in Settings.'],
   dict.tut[2],
   [dict.tut[3][0], "The faces above the bar are your residents. Tap one and their wish appears at the top of the screen, then tucks itself away after a few seconds. Watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
   dict.tut[4],
 ];
 dict['tut.touch'] = [
   [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
-  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows at the top right turn the camera. Use ↻ to rotate a piece before placing it. Move, Remove, Undo and Redo sit at the right end of the bar.'],
+  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows at the top right turn the camera. Use ↻ to rotate a piece before placing it. Move and Remove sit at one end of the bar.'],
   dict.tut[2],
   [dict.tut[3][0], "The faces at the top are your residents. Tap one to see their wish, and watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
   dict.tut[4],

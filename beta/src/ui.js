@@ -324,10 +324,19 @@ export class UI {
       clearTimeout(this.aimTimer);
       return;
     }
+    // 单手版式里这一条挤在分页那一排，地方小：只留要紧的字（放不下的原因、朝向、第几层）
+    const text = this.dock && s.short !== undefined ? s.short : s.text;
+    const plain = !s.rot && !s.cancel && !s.ok;
+    if (plain && !text) {
+      // 没有字也没有按钮：不用出现
+      this.aimBar.hidden = true;
+      this.aimKey = '';
+      clearTimeout(this.aimTimer);
+      return;
+    }
     this.aimBar.hidden = false;
     // 只有一句提示、没有按钮的时候：露两秒就慢慢淡出，不一直挡着小岛。换了一句话会重新露出来
-    const plain = !s.rot && !s.cancel && !s.ok;
-    const key = `${plain ? 1 : 0}${s.text}`;
+    const key = `${plain ? 1 : 0}${text}`;
     if (key !== this.aimKey) {
       this.aimKey = key;
       clearTimeout(this.aimTimer);
@@ -335,9 +344,6 @@ export class UI {
       this.aimBar.classList.toggle('plain', plain);
       if (plain) this.aimTimer = setTimeout(() => this.aimBar.classList.add('fade'), 2000);
     }
-    // 单手版式里这一条挤在分页那一排，地方小：有按钮的时候只留要紧的字（放不下的原因、朝向、第几层），
-    // "再点一次放下"由按钮自己说；放不下的时候确认按钮也收起
-    const text = this.dock && s.short !== undefined ? s.short : s.text;
     if (this.aimText.textContent !== text) this.aimText.textContent = text;
     this.aimBar.classList.toggle('bad', !!s.bad);
     this.aimRot.hidden = !s.rot;
@@ -357,12 +363,16 @@ export class UI {
       const wrap = $('#toolbar-wrap');
       const row = $('#tabrow');
       if (dock) {
-        wrap.insertBefore(this.toastEl, row);
-        wrap.insertBefore(this.wishBox, row);
+        // 头像那一排：居民数固定在一头，头像在剩下的地方左右滑
+        const people = $('#people');
+        people.appendChild(this.arrival);
+        people.appendChild(this.wishBox);
+        wrap.insertBefore(this.toastEl, people);
         row.insertBefore(this.aimBar, row.firstChild); // 确认、转向、取消这几个按钮并进分页那一排，不另占一行
         for (const b of cams) $('#cams').appendChild(b);
       } else {
         const ui = $('#ui');
+        this.wishBox.appendChild(this.arrival);
         ui.insertBefore(this.wishBox, this.wishDetail);
         ui.insertBefore(this.toastEl, this.hint.nextSibling);
         wrap.insertBefore(this.aimBar, row);
@@ -695,10 +705,18 @@ export class UI {
     this.lastP = p;
   }
 
-  // 摆放前的预览：这一步会让繁荣度变多少
-  setProsperPreview(delta) {
-    this.prDelta.textContent = delta ? `${delta > 0 ? '+' : '−'}${Math.abs(delta)}` : '';
-    this.prDelta.className = `pr-delta${delta > 0 ? ' up' : delta < 0 ? ' down' : ''}`;
+  // 放下之后：繁荣度变了多少，在数字旁边弹一下，过一会儿自己消失
+  popProsper(delta) {
+    const el = this.prDelta;
+    el.textContent = `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`;
+    el.className = `pr-delta ${delta > 0 ? 'up' : 'down'}`;
+    void el.offsetWidth; // 连着弹两次时，动画从头再来
+    el.classList.add('pop');
+    clearTimeout(this.popTimer);
+    this.popTimer = setTimeout(() => {
+      el.textContent = '';
+      el.className = 'pr-delta';
+    }, 1900);
   }
 
   // 升级提示：盖在画面中间，几秒后自己消失
@@ -728,7 +746,9 @@ export class UI {
       this.h.focusResident(spec.id);
       this.openWish(this.openWishId === spec.id ? null : spec.id);
     });
-    this.wishBox.insertBefore(el, this.arrival);
+    // 单手版式里那行"居民数"不在这个盒子里
+    if (this.arrival.parentNode === this.wishBox) this.wishBox.insertBefore(el, this.arrival);
+    else this.wishBox.appendChild(el);
     this.wishEls.set(spec.id, { el, spec, mood: -1, tier: 0, bonus: false });
     const b = document.createElement('div');
     b.className = 'bubble';

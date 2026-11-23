@@ -861,6 +861,44 @@ export class View {
       this.selGroup.visible = false;
       return;
     }
+    this.frameSelection(rect, state);
+    const carrying = state === 'ok' || state === 'bad';
+    if (carrying) {
+      if (!this.lifted.length) {
+        this.lifted = cells.map((p) => ({ g: this.cellGroups[p.z * SIZE + p.x], x: p.x - HALF_SIZE + 0.5, z: p.z - HALF_SIZE + 0.5 }));
+      }
+      this.selGoal.set(dx, 0.2, dz);
+    } else {
+      this.clearLift();
+    }
+  }
+
+  // 整块搬动的预览（触屏）：把这些格子上的东西抬起来，摆到各自的新位置、转好方向；世界本身还没改。
+  // pairs：[{ from, to }]；turns：顺时针一共转了几个 90°（一直累加，转起来才顺）
+  setCarry(rect, state, pairs, turns) {
+    const shown = this.selGroup.visible;
+    const ox = this.selBase.x + this.selOff.x;
+    const oz = this.selBase.z + this.selOff.z;
+    this.frameSelection(rect, state);
+    // 框从上一个位置滑到新位置，不跳
+    if (shown) this.selOff.set(ox - this.selBase.x, 0, oz - this.selBase.z);
+    else this.selOff.set(0, 0, 0);
+    this.selGoal.set(0, 0, 0);
+    const prev = new Map(this.lifted.filter((l) => l.free).map((l) => [l.g, l]));
+    this.lifted = pairs.map(({ from, to }) => {
+      const g = this.cellGroups[from.z * SIZE + from.x];
+      const x = from.x - HALF_SIZE + 0.5;
+      const z = from.z - HALF_SIZE + 0.5;
+      const l = prev.get(g) || { g, x, z, px: x, py: 0, pz: z, pr: 0, free: true };
+      l.tx = to.x - HALF_SIZE + 0.5;
+      l.tz = to.z - HALF_SIZE + 0.5;
+      l.tr = (-turns * Math.PI) / 2;
+      return l;
+    });
+  }
+
+  // 画圈选的框：位置、大小、颜色
+  frameSelection(rect, state) {
     const w = rect.x1 - rect.x0 + 1;
     const d = rect.z1 - rect.z0 + 1;
     const [n, s, e, wst] = this.selBars;
@@ -877,21 +915,15 @@ export class View {
     const color = state === 'bad' ? '#ff8a76' : state === 'ok' ? '#c9f5b0' : state === 'box' ? '#ffffff' : '#ffe08a';
     this.selMat.color.set(color);
     this.selFillMat.color.set(color);
-    const carrying = state === 'ok' || state === 'bad';
-    if (carrying) {
-      if (!this.lifted.length) {
-        this.lifted = cells.map((p) => ({ g: this.cellGroups[p.z * SIZE + p.x], x: p.x - HALF_SIZE + 0.5, z: p.z - HALF_SIZE + 0.5 }));
-      }
-      this.selGoal.set(dx, 0.2, dz);
-    } else {
-      this.clearLift();
-    }
     this.selGroup.visible = true;
   }
 
   // 把跟着鼠标走的格子放回原位
   clearLift() {
-    for (const l of this.lifted) l.g.position.set(l.x, 0, l.z);
+    for (const l of this.lifted) {
+      l.g.position.set(l.x, 0, l.z);
+      l.g.rotation.y = 0;
+    }
     this.lifted = [];
     this.selOff.set(0, 0, 0);
     this.selGoal.set(0, 0, 0);
@@ -1043,10 +1075,23 @@ export class View {
     }
     if (this.marker.visible) this.marker.material.opacity = 0.26 + Math.sin(this.time * 6) * 0.08;
     if (this.selGroup.visible) {
-      this.selOff.lerp(this.selGoal, 1 - Math.exp(-dt * 22));
+      const sk = 1 - Math.exp(-dt * 22);
+      this.selOff.lerp(this.selGoal, sk);
       this.selGroup.position.set(this.selBase.x + this.selOff.x, this.selBase.y, this.selBase.z + this.selOff.z);
       this.selFillMat.opacity = 0.14 + Math.sin(this.time * 4) * 0.04;
-      for (const l of this.lifted) l.g.position.set(l.x + this.selOff.x, this.selOff.y, l.z + this.selOff.z);
+      for (const l of this.lifted) {
+        if (!l.free) {
+          l.g.position.set(l.x + this.selOff.x, this.selOff.y, l.z + this.selOff.z);
+          continue;
+        }
+        // 预览搬动：各去各的位置，转到各自的朝向
+        l.px += (l.tx - l.px) * sk;
+        l.py += (0.2 - l.py) * sk;
+        l.pz += (l.tz - l.pz) * sk;
+        l.pr += (l.tr - l.pr) * sk;
+        l.g.position.set(l.px, l.py, l.pz);
+        l.g.rotation.y = l.pr;
+      }
     }
     if (this.terrain) {
       this.terrain.sea.position.y = -0.2 + Math.sin(this.time * 0.8) * 0.012;
