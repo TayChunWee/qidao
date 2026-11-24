@@ -254,7 +254,7 @@ const dict = {
   'why.wallBlocked': 'この壁はとなりの建物でふさがっています',
   'why.moveOff': '島の外に出てしまいます',
   'why.moveDockWater': '桟橋は水の上に置きます',
-  'why.moveWater': 'ここは水面なので置けません',
+  'why.moveWater': '水の上には置けないよ',
   'why.moveTaken': 'そこにはもう何かあります',
   'why.balconyWouldBlock': 'ベランダがふさがってしまいます',
 

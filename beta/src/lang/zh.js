@@ -223,7 +223,7 @@ const dict = {
   'toast.locked': (need, name) => `繁荣度达到 ${need} 才能解锁「${name}」`,
   'toast.tier': (name, tier) => `${name}：${tier}`,
   'toast.bonusDone': (name) => `${name}的新想法实现了`,
-  'toast.rotBlocked': (reason) => `转过来放不下：${reason}。先搬到空一点的地方再转`,
+  'toast.rotBlocked': (reason) => `转过来放不下（${reason}），先搬到空一点的地方再转`,
   'toast.selected': '圈好了。拖动圈住的区域整块搬走，按 R 整块旋转',
   'hint.nothing': '这里没有东西可拆',
   'hint.facing': (d) => `朝${DIR[d]}`,
@@ -272,7 +272,7 @@ const dict = {
   'why.wallBlocked': '这面墙被隔壁挡住了',
   'why.moveOff': '挪到小岛外面去了',
   'why.moveDockWater': '码头要放在水面上',
-  'why.moveWater': '这里是水面，放不下',
+  'why.moveWater': '不能放在水面上噢~',
   'why.moveTaken': '那边已经有东西了',
   'why.balconyWouldBlock': '有阳台会被挡住',
 

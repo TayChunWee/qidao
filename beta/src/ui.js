@@ -324,7 +324,7 @@ export class UI {
       clearTimeout(this.aimTimer);
       return;
     }
-    // 单手版式里这一条挤在分页那一排，地方小：只留要紧的字（放不下的原因、朝向、第几层）
+    // 单手版式里这一条挤在分页那一排，地方小：只留要紧的字（朝向、第几层、摆放时放不下的原因）
     const text = this.dock && s.short !== undefined ? s.short : s.text;
     const plain = !s.rot && !s.cancel && !s.ok;
     if (plain && !text) {
@@ -348,7 +348,7 @@ export class UI {
     this.aimBar.classList.toggle('bad', !!s.bad);
     this.aimRot.hidden = !s.rot;
     this.aimNo.hidden = !s.cancel;
-    this.aimOk.hidden = !s.ok || (this.dock && !!s.bad);
+    this.aimOk.hidden = !s.ok;
     if (s.ok) this.aimOk.lastChild.textContent = s.ok;
   }
 
@@ -546,7 +546,8 @@ export class UI {
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
     this.dial = $('#dial');
-    this.sunDot = $('#sun-dot');
+    this.skySun = $('#sky-sun');
+    this.skyMoon = $('#sky-moon');
     this.prosper = $('#prosper');
     this.prLv = $('#pr-lv');
     this.prFill = $('#pr-fill');
@@ -672,14 +673,14 @@ export class UI {
       this.lastRot = rot;
       this.dial.style.setProperty('--rot', `${rot}rad`);
     }
-    const sun = isDay ? sunTheta.toFixed(3) : 'night';
+    const sun = (isDay ? 'd' : 'n') + sunTheta.toFixed(3);
     if (sun === this.lastSun) return;
     this.lastSun = sun;
-    // 太阳标在罗盘外圈：东边升起，经过南边，西边落下
-    const a = Math.PI / 2 + sunTheta;
-    this.sunDot.style.left = `${22 + Math.sin(a) * 26}px`;
-    this.sunDot.style.top = `${22 - Math.cos(a) * 26}px`;
-    this.sunDot.style.opacity = isDay ? 1 : 0;
+    // 太阳骑在罗盘外圈上：东边升起，经过南边，西边落下；夜里换成月亮，标的是月光照过来的方向。
+    // 只挪当前亮着的那一个，另一个留在原地慢慢淡掉
+    (isDay ? this.skySun : this.skyMoon).style.setProperty('--a', `${(Math.PI / 2 + sunTheta).toFixed(3)}rad`);
+    this.skySun.classList.toggle('on', isDay);
+    this.skyMoon.classList.toggle('on', !isDay);
   }
 
   // 繁荣度。p：现在的繁荣度；level：等级（从 0 起）；from、to：这一级的起点和升下一级要的数；

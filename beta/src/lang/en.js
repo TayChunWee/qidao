@@ -273,7 +273,7 @@ const dict = {
   'why.wallBlocked': 'This wall is blocked by the building next door',
   'why.moveOff': 'That would move things off the island',
   'why.moveDockWater': 'A dock has to sit on water',
-  'why.moveWater': "That's water, so it won't fit",
+  'why.moveWater': "It can't go on the water",
   'why.moveTaken': "There's already something there",
   'why.balconyWouldBlock': 'A balcony would end up blocked',
 

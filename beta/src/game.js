@@ -821,7 +821,7 @@ export class Game {
     this.refreshAim();
   }
 
-  // 按"确定"：真的搬过去，然后退出搬动
+  // 按"确定"：真的搬过去，然后退出搬动。框是红的（放不下）就只弹一句原因，留在原地让玩家接着挪
   confirmMove() {
     const p = this.pend;
     if (!p) return;
@@ -1404,7 +1404,7 @@ export class Game {
       const s = this.sel;
       const p = this.pend;
       if (d && d.mode === 'box') this.ui.setAim({ text: `${s.x1 - s.x0 + 1} × ${s.z1 - s.z0 + 1}` });
-      else if (p) this.ui.setAim({ text: p.valid ? t('aim.dragSel') : p.reason, short: p.valid ? '' : p.reason, bad: !p.valid, rot: true, ok: t('aim.confirm'), cancel: true });
+      else if (p) this.ui.setAim({ text: p.valid ? t('aim.dragSel') : '', short: '', bad: !p.valid, rot: true, ok: t('aim.confirm'), cancel: true });
       else this.ui.setAim(null); // 还没圈：怎么圈已经在选中时的气泡里说过了
       return;
     }
