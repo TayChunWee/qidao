@@ -3,7 +3,7 @@ import { FPS_CHOICES } from './perf.js';
 import { World, SOLIDS, SOLO, START_CENTER } from './world.js';
 import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS } from './wishes.js';
 import { MODULES, TABS, H, DAY_LENGTH, SIZE, VERSION } from './config.js';
-import { t, nameOf, getLang, setLang } from './i18n.js';
+import { t, nameOf, descOf, getLang, setLang } from './i18n.js';
 import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf } from './progression.js';
 import { thumbParts } from './viewmodel.js';
 import { Resident, arrivalCell, walkable } from './residents.js';
@@ -12,12 +12,25 @@ import { TRACKS } from './music.js';
 import { sendFeedback } from './feedback.js';
 
 const SAVE_KEY = 'qidao-save-v2';
+const TAP_SLOP = 10; // 触屏上手指挪动不超过这么多像素，还算"点了一下"
 const SETTINGS_KEY = 'qidao-settings-v1';
 const MOD = Object.fromEntries(MODULES.map((m) => [m.id, m]));
 const ARRIVE_DELAY = 8; // 所有人都住下之后，过多少秒来下一位
 const IDEA_DELAY = 45; // 居民住得满意多少秒之后，会冒出一个新想法
 const IDEA_GAP = 20; // 两个新想法之间至少隔多少秒
 const pairsOf = (cells, dx, dz) => cells.map((p) => ({ from: p, to: { x: p.x + dx, z: p.z + dz } }));
+// 把一个矩形和里面的点顺时针转 90°（取整的规矩和 world.rotatePairs 一样，连转四次回到原处）
+const rotateRect = (r, pts, flip) => {
+  const w = r.x1 - r.x0 + 1;
+  const d = r.z1 - r.z0 + 1;
+  const round = flip ? Math.floor : Math.ceil;
+  const nx0 = round(r.x0 + (w - d) / 2);
+  const nz0 = round(r.z0 + (d - w) / 2);
+  return {
+    rect: { x0: nx0, z0: nz0, x1: nx0 + d - 1, z1: nz0 + w - 1 },
+    pts: pts.map((p) => ({ x: nx0 + (d - 1 - (p.z - r.z0)), z: nz0 + (p.x - r.x0) })),
+  };
+};
 const FIRST_SPOTS = [
   { x: 8, z: 8 },
   { x: 9, z: 9 },
@@ -69,7 +82,7 @@ export class Game {
     this.done = false;
 
     // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
-    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, tutorialDone: false, growthTipDone: false };
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
@@ -125,7 +138,20 @@ export class Game {
         this.ui.setFpsChoice(this.settings.fps, on);
         this.saveSettings();
       },
+      setHand: (hand) => {
+        this.settings.hand = hand;
+        this.ui.setHand(hand);
+        this.saveSettings();
+      },
+      setTheme: (mode) => {
+        this.settings.theme = mode;
+        this.ui.setThemeMode(mode, true);
+        this.saveSettings();
+      },
       reset: () => this.reset(),
+      rotate: () => this.rotate(),
+      aimConfirm: () => (this.tool === 'move' ? this.confirmMove() : this.confirmAim()),
+      aimCancel: () => this.cancelAim(),
       sendFeedback: (data) => sendFeedback({ ...data, info: this.feedbackInfo() }),
       focusResident: (id) => this.focusResident(id),
       hoverSound: () => this.audio.hover(),
@@ -134,6 +160,8 @@ export class Game {
     this.ui.setVolumes(this.settings.music, this.settings.sfx);
     this.ui.setTrack(this.settings.track);
     this.ui.setFpsChoice(this.settings.fps, this.settings.showFps);
+    this.ui.setThemeMode(this.settings.theme);
+    this.ui.setHand(this.settings.hand);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
 
@@ -165,7 +193,12 @@ export class Game {
     this.refreshProsperity();
     this.ui.setTool(null);
     this.ui.setUndoState(false, false);
+    // 触屏：手指和鼠标的操作方式不一样。先按设备猜一个，之后以玩家实际用的为准
+    this.touch = false;
+    this.pointers = new Map(); // 屏幕上的每根手指：pointerId → { x, y }
+    this.aim = null; // 触屏上点了一下、还没确认放下的那个位置
     this.bindInput();
+    this.setTouch(!!window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
   }
 
   // ---------- 开始、存档 ----------
@@ -178,6 +211,10 @@ export class Game {
     this.audio.setIntensity(this.world.count());
     this.audio.click();
     this.ui.hideStart();
+    // 手机上居民的愿望收在头像里：开局先替玩家点开一位还没安顿好的
+    const needy = this.results.find((r) => r.tier < 2);
+    if (needy) this.ui.openWish(needy.id);
+    this.refreshAim();
     // 第一次玩看完整的说明；玩过旧版本的只补看"让小岛长大"那一步
     if (!this.settings.tutorialDone || !this.settings.growthTipDone) {
       const from = this.settings.tutorialDone ? -1 : 0;
@@ -240,7 +277,7 @@ export class Game {
     return [
       `版本 ${VERSION}，语言 ${getLang()}`,
       `小岛 ${this.level + 1} 级，繁荣度 ${this.prosperity}，建造规模 ${this.world.count()}`,
-      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}`,
+      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}，界面 ${this.settings.theme}，${this.ui.dock ? `单手版式 ${this.settings.hand}` : '非单手版式'}`,
       `窗口 ${window.innerWidth}×${window.innerHeight}（像素比 ${window.devicePixelRatio}）`,
       navigator.userAgent,
     ].join('\n');
@@ -511,6 +548,15 @@ export class Game {
     }
     this.ui.setTool(this.tool);
     if (fromUi || this.started) this.audio.click();
+    this.aim = null;
+    this.pickKey = '';
+    this.ui.setAim(null);
+    // 触屏上没有"鼠标移上去看说明"：选中的时候在按钮上方弹出说明和用法，几秒后自己淡出
+    if (this.touch && this.started) {
+      if (!this.tool) this.ui.hideTip();
+      else if (m) this.ui.showTip(id, descOf(id, true), t(m.paint ? 'aim.paint' : 'aim.tap'));
+      else this.ui.showTip(id, '', t(id === 'move' ? 'aim.box' : 'aim.remove'));
+    }
     this.refreshHover();
   }
 
@@ -592,6 +638,12 @@ export class Game {
   }
 
   refreshHover() {
+    if (this.touch) {
+      // 触屏没有悬停：预览跟着"点中的位置"走
+      const on = this.started && this.tool && this.tool !== 'move' && this.aim;
+      this.setHover(on ? this.computeHover(this.aim) : null);
+      return;
+    }
     if (!this.mouse || !this.mouse.inside || !this.started || this.drag) {
       this.setHover(null);
       return;
@@ -620,30 +672,37 @@ export class Game {
     }
     this.hover = h;
     this.view.setHover(h);
+    if (this.touch) {
+      this.ui.setHint(null);
+      this.refreshAim();
+      return;
+    }
     if (!h || !this.mouse) {
       this.ui.setHint(null);
       return;
     }
-    let text = '';
-    if (!h.valid) text = h.reason;
-    else if (h.type === 'balcony') text = `${t('hint.facing', h.dir)} · ${t('hint.floor', h.level + 1)}`;
-    else if (h.kind === 'place' && h.rot) text = t('hint.facing', h.dir);
-    else if (h.kind === 'place' && h.level >= 1) text = t('hint.floor', h.level + 1);
-    this.ui.setHint(text, this.mouse.x, this.mouse.y, !h.valid);
+    this.ui.setHint(this.hoverText(h), this.mouse.x, this.mouse.y, !h.valid);
+  }
+
+  // 预览旁边的一句话：放不了的原因，或者朝向、第几层
+  hoverText(h) {
+    if (!h.valid) return h.reason;
+    if (h.type === 'balcony') return `${t('hint.facing', h.dir)} · ${t('hint.floor', h.level + 1)}`;
+    if (h.kind === 'place' && h.rot) return t('hint.facing', h.dir);
+    if (h.kind === 'place' && h.level >= 1) return t('hint.floor', h.level + 1);
+    return '';
   }
 
   // 摆放前先在副本上算一遍，让居民的表情和繁荣度提前变化
   updatePreview(h) {
     if (!h || !h.valid) {
       this.ui.setPreview(null);
-      this.ui.setProsperPreview(0);
       return;
     }
     const w = this.world.clone();
     this.applyTo(w, h);
     const res = this.evaluate(w);
     this.ui.setPreview(res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })));
-    this.ui.setProsperPreview(prosperityOf(res) - this.prosperity);
   }
 
   applyTo(w, h) {
@@ -679,9 +738,10 @@ export class Game {
     if (!this.sel && !this.selDrag) return;
     this.sel = null;
     this.selDrag = null;
+    this.pend = null; // 还没按"确定"的搬动作废，东西回到原处
     this.view.setSelection(null);
     this.ui.setPreview(null);
-    this.ui.setProsperPreview(0);
+    this.refreshAim();
   }
 
   inSel(p) {
@@ -726,10 +786,78 @@ export class Game {
     this.view.settle(pairs.map((p) => p.to));
   }
 
+  // ---- 触屏上的搬动：圈好以后，拖动和转向都只改一份"打算"，画面上能看到搬过去的样子，
+  // 世界本身不动；按"确定"才真的搬，按取消就当没动过 ----
+
+  startPend(rect) {
+    const cells = this.world.occupied(rect.x0, rect.z0, rect.x1, rect.z1);
+    this.pend = { cells, cur: cells.map((p) => ({ x: p.x, z: p.z })), rect: { ...rect }, turns: 0, flip: false, valid: true, reason: '', changed: false };
+    this.showPend();
+    if (!this.selTipShown) {
+      this.selTipShown = true;
+      this.ui.toast(t('toast.pend'), 4.5);
+    }
+  }
+
+  // 按现在的打算算一遍：放不放得下、居民会怎么想；再把预览画出来。放不下不拦着，框变红
+  showPend() {
+    const p = this.pend;
+    if (!p) return;
+    const pairs = p.cells.map((c, i) => ({ from: c, to: p.cur[i] }));
+    p.changed = p.turns % 4 !== 0 || pairs.some((q) => q.from.x !== q.to.x || q.from.z !== q.to.z);
+    p.valid = true;
+    p.reason = '';
+    let res = null;
+    if (p.changed) {
+      const w = this.world.clone();
+      const r = w.relocate(pairs, p.turns % 4);
+      p.valid = r.ok;
+      p.reason = r.reason || '';
+      if (r.ok) res = evaluateAll(w, this.rosterMoved(pairs));
+    }
+    this.ui.setPreview(res && res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })));
+    this.sel = p.rect;
+    this.view.setCarry(p.rect, !p.valid ? 'bad' : p.changed ? 'ok' : 'idle', pairs, p.turns);
+    this.refreshAim();
+  }
+
+  // 按"确定"：真的搬过去，然后退出搬动。框是红的（放不下）就只弹一句原因，留在原地让玩家接着挪
+  confirmMove() {
+    const p = this.pend;
+    if (!p) return;
+    if (!p.valid) {
+      this.audio.invalid();
+      if (p.reason) this.ui.toast(p.reason);
+      return;
+    }
+    this.pend = null;
+    this.ui.setPreview(null);
+    if (p.changed) {
+      this.applyRelocation(
+        p.cells.map((c, i) => ({ from: c, to: p.cur[i] })),
+        p.turns % 4,
+        p.rect,
+      );
+    }
+    this.clearSelection();
+    if (this.tool === 'move') this.selectTool('move');
+  }
+
   // 把圈住的一块原地顺时针转 90°
   rotateSelection() {
     const s = this.sel;
     if (!s || this.selDrag) return;
+    if (this.pend) {
+      const p = this.pend;
+      const r = rotateRect(p.rect, p.cur, p.flip);
+      p.rect = r.rect;
+      p.cur = r.pts;
+      p.flip = !p.flip;
+      p.turns++;
+      this.audio.rotate();
+      this.showPend();
+      return;
+    }
     const { pairs, rect } = this.world.rotatePairs(s.x0, s.z0, s.x1, s.z1, this.rotFlip);
     const test = this.world.clone().relocate(pairs, 1);
     if (!test.ok) {
@@ -745,6 +873,14 @@ export class Game {
 
   moveDown(e) {
     const p = this.view.pickGround(e.clientX, e.clientY);
+    if (this.pend) {
+      // 预览着的时候：按在框里是拖着它走；按在框外不算数（单指照常移动画面，找地方放）
+      if (p && this.inSel(p)) {
+        this.selDrag = { mode: 'pend', ax: p.x, az: p.z, dx: 0, dz: 0 };
+        this.audio.snap();
+      }
+      return;
+    }
     if (!p) return;
     // 按在圈住的区域里（或者圈住的建筑身上）就是要搬；按在别处就重新圈
     if (this.sel && (this.inSel(p) || this.inSel(this.view.pick(e.clientX, e.clientY)))) {
@@ -763,6 +899,22 @@ export class Game {
   moveMove(e) {
     const d = this.selDrag;
     const p = d && this.view.pickGround(e.clientX, e.clientY);
+    if (d && d.mode === 'pend') {
+      const q = this.pend;
+      if (!p || !q) return;
+      const dx = p.x - d.ax;
+      const dz = p.z - d.az;
+      if (dx === d.dx && dz === d.dz) return;
+      const sx = dx - d.dx;
+      const sz = dz - d.dz;
+      d.dx = dx;
+      d.dz = dz;
+      q.cur = q.cur.map((c) => ({ x: c.x + sx, z: c.z + sz }));
+      q.rect = { x0: q.rect.x0 + sx, z0: q.rect.z0 + sz, x1: q.rect.x1 + sx, z1: q.rect.z1 + sz };
+      this.showPend();
+      if (q.valid) this.audio.snap();
+      return;
+    }
     if (p && d.mode === 'box') {
       const s = { x0: Math.min(d.ax, p.x), z0: Math.min(d.az, p.z), x1: Math.max(d.ax, p.x), z1: Math.max(d.az, p.z) };
       const o = this.sel;
@@ -789,7 +941,6 @@ export class Game {
           if (r.ok) res = evaluateAll(w, this.rosterMoved(pairsOf(d.cells, dx, dz)));
         }
         this.ui.setPreview(res && res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })));
-        this.ui.setProsperPreview(res ? prosperityOf(res) - this.prosperity : 0);
         this.view.setSelection(this.sel, d.valid ? 'ok' : 'bad', d.cells, dx, dz);
         if (d.valid) this.audio.snap();
       }
@@ -800,15 +951,18 @@ export class Game {
   moveUp() {
     const d = this.selDrag;
     this.selDrag = null;
-    if (!d) return;
+    if (!d || d.mode === 'pend') return; // 预览着的拖动：松手不算放下，等按"确定"
     const s = this.sel;
     if (d.mode === 'box') {
       if (!this.world.occupied(s.x0, s.z0, s.x1, s.z1).length) {
         this.clearSelection();
+      } else if (this.touch) {
+        this.audio.click();
+        this.startPend(s);
       } else {
         this.view.setSelection(s, 'idle');
         this.audio.click();
-        if (!this.selTipShown) {
+        if (!this.touch && !this.selTipShown) {
           this.selTipShown = true;
           this.ui.toast(t('toast.selected'), 3.6);
         }
@@ -816,7 +970,6 @@ export class Game {
       return;
     }
     this.ui.setPreview(null);
-    this.ui.setProsperPreview(0);
     if ((!d.dx && !d.dz) || !d.valid) {
       if (!d.valid) {
         this.audio.invalid();
@@ -831,6 +984,11 @@ export class Game {
 
   // 搬动工具跟在鼠标旁边的小提示
   moveHint() {
+    if (this.touch) {
+      this.ui.setHint(null);
+      this.refreshAim();
+      return;
+    }
     const m = this.mouse;
     if (!m || !m.inside) {
       this.ui.setHint(null);
@@ -855,6 +1013,7 @@ export class Game {
   // 世界或居民名单发生变化之后统一走这里
   // mode：'place' 玩家摆放或拆除；'move' 整块搬动；'arrive' 来了新居民；'idea' 有人冒出新想法；'bulk' 撤销、重做、重置
   commit(mode) {
+    const was = this.prosperity;
     if (mode === 'place' || mode === 'move' || mode === 'bulk') this.worldVer++;
     this.results = this.evaluate();
     const info = this.view.sync(this.world, this.ctx(), mode === 'bulk' ? 'bulk' : mode === 'move' ? 'instant' : 'place');
@@ -865,9 +1024,11 @@ export class Game {
     this.checkLevel();
     this.ui.setWishes(this.results);
     this.refreshProsperity();
+    // 玩家亲手摆放、拆除、搬动让繁荣度变了：在数字旁边弹一下"+1"（一次满足好几个愿望就是 +2、+3）
+    if ((mode === 'place' || mode === 'move') && this.prosperity !== was) this.ui.popProsper(this.prosperity - was);
     this.ui.setUndoState(this.undoStack.length > 0, this.redoStack.length > 0);
     this.audio.setIntensity(this.world.count());
-    this.hoverKey = '';
+    this.hoverKey = null; // 不等于任何落点（包括"没有落点"）：下面这一步一定会把预览重算或收起
     this.refreshHover();
     this.queueSave();
   }
@@ -939,7 +1100,15 @@ export class Game {
     const cv = this.view.canvas;
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // 手指和触控笔走触屏那一套，鼠标走原来的
+    const isTouch = (e) => e.pointerType !== 'mouse';
+
     cv.addEventListener('pointermove', (e) => {
+      if (isTouch(e)) {
+        this.touchMove(e);
+        return;
+      }
+      if (this.touch) this.setTouch(false);
       this.mouse = { x: e.clientX, y: e.clientY, inside: true };
       if (this.drag) {
         this.view.pan(e.clientX - this.drag.x, e.clientY - this.drag.y);
@@ -957,6 +1126,11 @@ export class Game {
 
     cv.addEventListener('pointerdown', (e) => {
       if (!this.started) return;
+      this.setTouch(isTouch(e));
+      if (this.touch) {
+        this.touchDown(e);
+        return;
+      }
       this.mouse = { x: e.clientX, y: e.clientY, inside: true };
       try {
         cv.setPointerCapture(e.pointerId);
@@ -978,6 +1152,10 @@ export class Game {
     });
 
     const end = (e) => {
+      if (isTouch(e)) {
+        this.touchUp(e, e.type === 'pointercancel');
+        return;
+      }
       if (this.selDrag) this.moveUp();
       this.painting = false;
       this.strokePushed = false;
@@ -991,7 +1169,8 @@ export class Game {
     cv.addEventListener('pointerup', end);
     cv.addEventListener('pointercancel', end);
 
-    cv.addEventListener('pointerleave', () => {
+    cv.addEventListener('pointerleave', (e) => {
+      if (isTouch(e)) return;
       if (this.mouse) this.mouse.inside = false;
       if (!this.drag && !this.painting) this.setHover(null);
     });
@@ -1004,6 +1183,17 @@ export class Game {
       },
       { passive: false },
     );
+
+    // 手机上切走页面后随时可能被系统关掉，离开前先把存档写下去
+    const flush = () => {
+      if (!this.started) return;
+      clearTimeout(this.saveTimer);
+      this.save();
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flush();
+    });
+    window.addEventListener('pagehide', flush);
 
     window.addEventListener('keydown', (e) => {
       // 在输入框里打字的时候，不当成游戏的快捷键
@@ -1045,6 +1235,191 @@ export class Game {
     });
   }
 
+  // ---------- 触屏 ----------
+  // 单指拖动平移，双指捏合缩放。选了模块以后，点一下是"瞄准"（出现预览，居民的表情跟着变），
+  // 再点同一处或按确认才放下；路、花园这些可以连着摆的，点一下直接放下。
+  // 搬动工具和鼠标一样靠拖：拖出一块区域，再拖着它走，这时候平移画面用双指。
+
+  setTouch(on) {
+    if (this.touch === on) return;
+    if (this.pend) this.clearSelection();
+    this.touch = on;
+    this.aim = null;
+    this.pickKey = '';
+    this.pointers.clear();
+    this.tap = null;
+    if (on) this.mouse = null;
+    this.ui.setTouch(on);
+    this.setHover(null);
+    this.refreshAim();
+  }
+
+  // 两根手指之间的距离和中点
+  pinchState() {
+    const [a, b] = [...this.pointers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  }
+
+  touchDown(e) {
+    const ps = this.pointers;
+    ps.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    this.ui.hideTip();
+    if (ps.size === 1) {
+      this.tap = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      if (this.tool === 'move') {
+        this.moveDown(e);
+        this.refreshAim();
+      }
+    } else {
+      // 第二根手指落下：改成缩放和平移，第一根手指正在做的事作废
+      this.tap = null;
+      this.cancelMoveDrag();
+      this.pinch = this.pinchState();
+    }
+  }
+
+  touchMove(e) {
+    const p = this.pointers.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (this.pointers.size >= 2) {
+      const now = this.pinchState();
+      const was = this.pinch || now;
+      if (was.d > 10 && now.d > 10) this.view.zoomScale(now.d / was.d);
+      this.view.pan(now.cx - was.cx, now.cy - was.cy);
+      this.pinch = now;
+      return;
+    }
+    if (this.selDrag) {
+      this.moveMove(e);
+      return;
+    }
+    const tap = this.tap;
+    if (tap && !tap.moved) {
+      // 手指难免抖一下：挪出一小段距离才算拖动，否则还算点击
+      if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < TAP_SLOP) return;
+      tap.moved = true;
+    }
+    this.view.pan(dx, dy);
+  }
+
+  touchUp(e, cancelled) {
+    const ps = this.pointers;
+    if (!ps.has(e.pointerId)) return;
+    ps.delete(e.pointerId);
+    this.pinch = ps.size >= 2 ? this.pinchState() : null;
+    if (ps.size) return; // 还有手指在屏幕上：接着平移，不算点击
+    const tap = this.tap;
+    this.tap = null;
+    if (this.selDrag) {
+      this.moveUp();
+      this.refreshAim();
+      return;
+    }
+    if (cancelled || !tap || tap.moved || tap.id !== e.pointerId) return;
+    this.handleTap(tap.x, tap.y);
+  }
+
+  // 圈选或搬到一半时第二根手指落下：这次拖动不算数
+  cancelMoveDrag() {
+    const d = this.selDrag;
+    if (!d) return;
+    if (d.mode === 'box') {
+      this.clearSelection();
+      return;
+    }
+    this.selDrag = null;
+    if (d.mode === 'pend') return; // 预览留在原地
+    this.ui.setPreview(null);
+    this.view.setSelection(this.sel, 'idle');
+    this.refreshAim();
+  }
+
+  handleTap(x, y) {
+    const tool = this.tool;
+    if (!tool || tool === 'move') return;
+    const pick = this.view.pick(x, y);
+    if (!pick) {
+      this.cancelAim();
+      return;
+    }
+    if (MOD[tool] && MOD[tool].paint) {
+      // 可以连着摆的：点一下就放下，每一下各算一步撤销
+      this.aim = null;
+      this.rotOverride = false;
+      this.strokePushed = false;
+      this.act(this.computeHover(pick));
+      this.strokePushed = false;
+      return;
+    }
+    const key = `${pick.x},${pick.z},${pick.level},${pick.face}`;
+    if (this.aim && key === this.pickKey) {
+      this.confirmAim();
+      return;
+    }
+    this.aim = pick;
+    this.pickKey = key;
+    this.rotOverride = false;
+    this.audio.hover();
+    this.refreshHover();
+  }
+
+  // 把瞄准的那一下真的做掉
+  confirmAim() {
+    const h = this.aim && this.hover;
+    if (!h) return;
+    if (!h.valid) {
+      this.act(h); // 放不了：说出原因，预览留着，方便换个朝向或位置
+      return;
+    }
+    this.aim = null;
+    this.pickKey = '';
+    this.strokePushed = false;
+    this.act(h);
+    this.strokePushed = false;
+  }
+
+  cancelAim() {
+    if (this.tool === 'move') {
+      this.clearSelection();
+      return;
+    }
+    this.aim = null;
+    this.pickKey = '';
+    this.refreshHover();
+  }
+
+  // 工具栏上方的那一条：现在该怎么做，以及转向、确认、取消几个按钮
+  refreshAim() {
+    const tool = this.tool;
+    if (!this.touch || !this.started || !tool) {
+      this.ui.setAim(null);
+      return;
+    }
+    if (tool === 'move') {
+      const d = this.selDrag;
+      const s = this.sel;
+      const p = this.pend;
+      if (d && d.mode === 'box') this.ui.setAim({ text: `${s.x1 - s.x0 + 1} × ${s.z1 - s.z0 + 1}` });
+      else if (p) this.ui.setAim({ text: p.valid ? t('aim.dragSel') : '', short: '', bad: !p.valid, rot: true, ok: t('aim.confirm'), cancel: true });
+      else this.ui.setAim(null); // 还没圈：怎么圈已经在选中时的气泡里说过了
+      return;
+    }
+    const h = this.aim ? this.hover : null;
+    if (!h) {
+      this.ui.setAim(null);
+      return;
+    }
+    const place = h.kind === 'place';
+    const info = this.hoverText(h);
+    const text = h.valid ? `${info ? `${info} · ` : ''}${t(place ? 'aim.again' : 'aim.againRemove')}` : info;
+    // 没有"放下""取消"按钮：再点一次同一处就是确定，点别处就是换地方
+    this.ui.setAim({ text, short: info, bad: !h.valid, rot: !!h.rot });
+  }
+
   // ---------- 每帧 ----------
 
   update(dt) {
@@ -1055,6 +1430,7 @@ export class Game {
       this.lastBright = bright;
       this.audio.setBright(bright);
     }
+    this.ui.updateTheme(this.view.night, dt);
 
     this.updateArrival(dt);
     this.ideaTick -= dt;
@@ -1080,8 +1456,9 @@ export class Game {
     if (this.clockTimer <= 0) {
       this.clockTimer = 0.25;
       this.ui.setClock(this.t, this.view.isDay);
+      this.ui.setChrome(`#${this.view.scene.background.getHexString()}`);
     }
     // 镜头在动的时候，鼠标没动也要更新落点
-    if (this.mouse && this.mouse.inside && this.tool && !this.drag && Math.abs(this.view.az - this.view.azGoal) > 0.002) this.refreshHover();
+    if (!this.touch && this.mouse && this.mouse.inside && this.tool && !this.drag && Math.abs(this.view.az - this.view.azGoal) > 0.002) this.refreshHover();
   }
 }

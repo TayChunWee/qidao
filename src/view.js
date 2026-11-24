@@ -1,5 +1,5 @@
 // 3D 场景：镜头、灯光与昼夜、零件的增删动画、摆放虚影、粒子、拾取。
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.min.js';
 import { SIZE, H, C, DIRS, DIR_RY, opp } from './config.js';
 import { buildPart, buildTerrain, buildZoneLand, buildZoneCells, buildZoneSand, mats } from './models.js';
 import { MAX_STAGE, START_CENTER } from './world.js';
@@ -9,6 +9,7 @@ import { Anim, ease } from './anim.js';
 const ELEV = THREE.MathUtils.degToRad(34);
 const CAM_DIST = 60;
 const VIEW_H = 15.5; // 缩放为 1 时竖直方向可见的世界单位
+const ZOOM_MAX = 2.8; // 最多放大到几倍（宽屏上）
 const HALF_SIZE = SIZE / 2;
 const PAN_LIMIT = HALF_SIZE;
 const RISE_DEPTH = -0.95; // 新陆地从多深的地方升上来
@@ -138,6 +139,7 @@ export class View {
     this.azGoal = this.az;
     this.zoom = FRAMES[0].zoom;
     this.zoomGoal = this.zoom;
+    this.zoomMax = ZOOM_MAX;
     this.target = new THREE.Vector3(FRAMES[0].x, 0.7, FRAMES[0].z);
     this.targetGoal = this.target.clone();
     this.frame = FRAMES[0];
@@ -263,6 +265,8 @@ export class View {
     this.hover = null;
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    // 有些手机浏览器转屏时不报 resize，或者报得太早，尺寸还是旧的
+    window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 300));
     this.setTime(0.1);
     this.updateCamera(1);
   }
@@ -441,6 +445,10 @@ export class View {
     // 窗口很窄时保证整座岛都在画面里
     const vh = Math.max(VIEW_H, 21 / aspect);
     this.viewH = vh;
+    // 竖着拿的手机为了装下整座岛，画面本来就缩小了好几倍；放大的上限跟着抬高，
+    // 放到最大时房子在屏幕上和电脑上差不多大
+    this.zoomMax = ZOOM_MAX * Math.min(2.5, vh / VIEW_H);
+    this.zoomGoal = Math.min(this.zoomGoal, this.zoomMax);
     this.camera.left = (-vh * aspect) / 2;
     this.camera.right = (vh * aspect) / 2;
     this.camera.top = vh / 2;
@@ -469,7 +477,12 @@ export class View {
   }
 
   zoomBy(delta) {
-    this.zoomGoal = Math.min(2.8, Math.max(0.5, this.zoomGoal * Math.exp(-delta * 0.0012)));
+    this.zoomGoal = Math.min(this.zoomMax, Math.max(0.5, this.zoomGoal * Math.exp(-delta * 0.0012)));
+  }
+
+  // 双指捏合：按两指间距变化的倍数缩放
+  zoomScale(f) {
+    this.zoomGoal = Math.min(this.zoomMax, Math.max(0.5, this.zoomGoal * f));
   }
 
   pan(dx, dy) {
@@ -848,6 +861,44 @@ export class View {
       this.selGroup.visible = false;
       return;
     }
+    this.frameSelection(rect, state);
+    const carrying = state === 'ok' || state === 'bad';
+    if (carrying) {
+      if (!this.lifted.length) {
+        this.lifted = cells.map((p) => ({ g: this.cellGroups[p.z * SIZE + p.x], x: p.x - HALF_SIZE + 0.5, z: p.z - HALF_SIZE + 0.5 }));
+      }
+      this.selGoal.set(dx, 0.2, dz);
+    } else {
+      this.clearLift();
+    }
+  }
+
+  // 整块搬动的预览（触屏）：把这些格子上的东西抬起来，摆到各自的新位置、转好方向；世界本身还没改。
+  // pairs：[{ from, to }]；turns：顺时针一共转了几个 90°（一直累加，转起来才顺）
+  setCarry(rect, state, pairs, turns) {
+    const shown = this.selGroup.visible;
+    const ox = this.selBase.x + this.selOff.x;
+    const oz = this.selBase.z + this.selOff.z;
+    this.frameSelection(rect, state);
+    // 框从上一个位置滑到新位置，不跳
+    if (shown) this.selOff.set(ox - this.selBase.x, 0, oz - this.selBase.z);
+    else this.selOff.set(0, 0, 0);
+    this.selGoal.set(0, 0, 0);
+    const prev = new Map(this.lifted.filter((l) => l.free).map((l) => [l.g, l]));
+    this.lifted = pairs.map(({ from, to }) => {
+      const g = this.cellGroups[from.z * SIZE + from.x];
+      const x = from.x - HALF_SIZE + 0.5;
+      const z = from.z - HALF_SIZE + 0.5;
+      const l = prev.get(g) || { g, x, z, px: x, py: 0, pz: z, pr: 0, free: true };
+      l.tx = to.x - HALF_SIZE + 0.5;
+      l.tz = to.z - HALF_SIZE + 0.5;
+      l.tr = (-turns * Math.PI) / 2;
+      return l;
+    });
+  }
+
+  // 画圈选的框：位置、大小、颜色
+  frameSelection(rect, state) {
     const w = rect.x1 - rect.x0 + 1;
     const d = rect.z1 - rect.z0 + 1;
     const [n, s, e, wst] = this.selBars;
@@ -864,21 +915,15 @@ export class View {
     const color = state === 'bad' ? '#ff8a76' : state === 'ok' ? '#c9f5b0' : state === 'box' ? '#ffffff' : '#ffe08a';
     this.selMat.color.set(color);
     this.selFillMat.color.set(color);
-    const carrying = state === 'ok' || state === 'bad';
-    if (carrying) {
-      if (!this.lifted.length) {
-        this.lifted = cells.map((p) => ({ g: this.cellGroups[p.z * SIZE + p.x], x: p.x - HALF_SIZE + 0.5, z: p.z - HALF_SIZE + 0.5 }));
-      }
-      this.selGoal.set(dx, 0.2, dz);
-    } else {
-      this.clearLift();
-    }
     this.selGroup.visible = true;
   }
 
   // 把跟着鼠标走的格子放回原位
   clearLift() {
-    for (const l of this.lifted) l.g.position.set(l.x, 0, l.z);
+    for (const l of this.lifted) {
+      l.g.position.set(l.x, 0, l.z);
+      l.g.rotation.y = 0;
+    }
     this.lifted = [];
     this.selOff.set(0, 0, 0);
     this.selGoal.set(0, 0, 0);
@@ -1030,10 +1075,23 @@ export class View {
     }
     if (this.marker.visible) this.marker.material.opacity = 0.26 + Math.sin(this.time * 6) * 0.08;
     if (this.selGroup.visible) {
-      this.selOff.lerp(this.selGoal, 1 - Math.exp(-dt * 22));
+      const sk = 1 - Math.exp(-dt * 22);
+      this.selOff.lerp(this.selGoal, sk);
       this.selGroup.position.set(this.selBase.x + this.selOff.x, this.selBase.y, this.selBase.z + this.selOff.z);
       this.selFillMat.opacity = 0.14 + Math.sin(this.time * 4) * 0.04;
-      for (const l of this.lifted) l.g.position.set(l.x + this.selOff.x, this.selOff.y, l.z + this.selOff.z);
+      for (const l of this.lifted) {
+        if (!l.free) {
+          l.g.position.set(l.x + this.selOff.x, this.selOff.y, l.z + this.selOff.z);
+          continue;
+        }
+        // 预览搬动：各去各的位置，转到各自的朝向
+        l.px += (l.tx - l.px) * sk;
+        l.py += (0.2 - l.py) * sk;
+        l.pz += (l.tz - l.pz) * sk;
+        l.pr += (l.tr - l.pr) * sk;
+        l.g.position.set(l.px, l.py, l.pz);
+        l.g.rotation.y = l.pr;
+      }
     }
     if (this.terrain) {
       this.terrain.sea.position.y = -0.2 + Math.sin(this.time * 0.8) * 0.012;

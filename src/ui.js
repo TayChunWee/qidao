@@ -17,12 +17,16 @@ const ICON = {
   help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8"/><path d="M12 17v.2"/>'),
   music: svg('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
   sound: svg('<path d="M4 10v4h3l5 4V6L7 10z"/><path d="M16 9a4 4 0 0 1 0 6"/>'),
-  gauge: svg('<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-6"/>'),
+  gauge: svg('<path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="m12 14 4-4"/>'),
   sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>'),
   moon: svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'),
   move: svg('<rect x="3.5" y="3.5" width="11" height="11" rx="2" stroke-dasharray="3 2.6"/><path d="M12.5 12.5 20 20M20 14.5V20h-5.5"/>'),
   lock: svg('<rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   next: svg('<path d="M6 5.5 15 12l-9 6.5z"/><path d="M18.5 5.5v13"/>'),
+  check: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
+  close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  turn: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>'),
+  hand: svg('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V11"/><path d="M14 11V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-.5a6 6 0 0 1-5-2.7L3.3 14a1.5 1.5 0 0 1 2.5-1.6L8 15"/>'),
   globe: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-5 5-5 13 0 18c5-5 5-13 0-18"/>'),
 };
 
@@ -34,6 +38,30 @@ const face = (mood) =>
   `<path d="${MOUTH[mood]}" fill="${mood === 3 ? '#4a3a32' : 'none'}" stroke="#4a3a32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const $ = (s) => document.querySelector(s);
+// 界面的明暗。每一项：样式变量、白天的颜色、夜里的颜色、是不是"字"；写成 rgb 的三个数，中间的过渡现算。
+// 名字以 -rgb 结尾的只给三个数（样式里配上各自的透明度用），--edge 另带透明度。
+// 底色在整段时间里慢慢变；字要从深色翻成浅色，翻到一半时和底色最接近、最难认，
+// 所以字只在底色变到一半的那一小段里很快翻过去
+const THEME = [
+  ['--ink', [90, 74, 64], [240, 231, 219], true],
+  ['--ink-soft', [141, 123, 110], [176, 168, 170], true],
+  ['--tint-rgb', [120, 90, 60], [255, 238, 220], true],
+  ['--good', [79, 138, 66], [163, 214, 146], true],
+  ['--warn', [185, 84, 63], [244, 164, 146], true],
+  ['--paper-rgb', [255, 249, 238], [44, 43, 64], false],
+  ['--raise-rgb', [255, 255, 255], [82, 79, 110], false],
+  ['--edge', [255, 255, 255, 0.75], [255, 255, 255, 0.12], false],
+];
+const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const THEMES = ['auto', 'light', 'dark'];
+const THEME_FADE = 5; // 入夜、天亮时界面换颜色用几秒
+const THEME_QUICK = 0.5; // 玩家自己在设置里换的时候
+
+// 手机的版式（和 styles.css 里那条 @media 一致）：竖着拿的窄屏，或者横着拿的矮屏
+const PHONE = '(max-width: 700px), (max-height: 500px)';
+// 其中横着拿的那一种（和 styles.css 里横屏那条 @media 一致）。竖着拿的才用单手版式
+const LANDSCAPE = '(max-height: 500px) and (min-width: 560px)';
+const HANDS = ['left', 'right'];
 
 export class UI {
   constructor(h) {
@@ -46,6 +74,21 @@ export class UI {
     this.tab = TABS[0].id;
     this.unlocked = new Set();
     this.toolNames = new Map(); // 工具栏每个按钮的名字（换语言时要重新取）
+    this.touch = false;
+    this.themeMode = 'auto';
+    this.themeAt = null; // 界面现在有多"夜"：0 浅色，1 深色；null 是还没定过
+    this.themeK = -1;
+    this.themeInk = -1;
+    this.themeQuick = false;
+    this.phone = window.matchMedia ? window.matchMedia(PHONE) : { matches: false };
+    this.land = window.matchMedia ? window.matchMedia(LANDSCAPE) : { matches: false };
+    this.dock = false; // 单手版式：头像和转镜头的按钮挪到了工具栏上方
+    this.lastAim = null;
+    this.hand = 'right';
+    this.hzPeak = 0;
+    this.chrome = '';
+    this.openWishId = null;
+    this.wishDetail = $('#wish-detail');
     this.buildToolbar();
     this.buildTop();
     this.wishBox = $('#wishes');
@@ -56,6 +99,14 @@ export class UI {
     this.toastEl = $('#toast');
     this.tooltip = $('#tooltip');
     $('#btn-start').addEventListener('click', () => h.start());
+    this.wishDetail.addEventListener('click', () => this.openWish(null));
+    const relayout = () => this.relayout();
+    for (const q of [this.phone, this.land]) {
+      if (q.addEventListener) q.addEventListener('change', relayout);
+      else if (q.addListener) q.addListener(relayout);
+    }
+    this.relayout();
+    this.guardPage();
     this.applyLang();
   }
 
@@ -84,6 +135,10 @@ export class UI {
       `<option value="synth">${t('music.synth')}</option>`;
     track.value = chosen;
     this.setNowPlaying(this.nowTrack, this.nowResting);
+
+    for (const b of $('#hand-seg').children) b.textContent = t(`hand.${b.dataset.hand}`);
+    $('#theme').innerHTML = THEMES.map((m) => `<option value="${m}">${t(`theme.${m}`)}</option>`).join('');
+    $('#theme').value = this.themeMode;
 
     const lang = getLang();
     $('#lang').value = lang;
@@ -117,7 +172,8 @@ export class UI {
     this.tabTip.className = 'tab-tip';
     tabs.appendChild(this.tabTip);
 
-    const bar = $('#toolbar');
+    const bar = $('#tool-list');
+    const acts = $('#acts');
     for (const m of MODULES) {
       const b = document.createElement('button');
       b.className = 'tool';
@@ -131,9 +187,6 @@ export class UI {
       this.toolEls.set(m.id, b);
       this.toolNames.set(m.id, name);
     }
-    const sep = document.createElement('span');
-    sep.className = 'tb-sep';
-    bar.appendChild(sep);
     const act = (id, icon, key, fn) => {
       const b = document.createElement('button');
       b.className = 'tool act';
@@ -142,7 +195,7 @@ export class UI {
       b.addEventListener('click', fn);
       const name = () => t(`act.${id}`);
       this.bindTip(b, name, () => t(`act.${id}.desc`));
-      bar.appendChild(b);
+      acts.appendChild(b);
       this.toolEls.set(id, b);
       this.toolNames.set(id, name);
       return b;
@@ -152,11 +205,25 @@ export class UI {
     this.undoBtn = act('undo', ICON.undo, 'Z', () => this.h.undo());
     this.redoBtn = act('redo', ICON.redo, 'Y', () => this.h.redo());
     this.setTab(this.tab);
+
+    // 触屏上工具栏上方的那一条
+    this.aimBar = $('#aimbar');
+    this.aimText = $('#aim-text');
+    this.aimRot = $('#aim-rot');
+    this.aimOk = $('#aim-ok');
+    this.aimNo = $('#aim-no');
+    this.aimRot.innerHTML = ICON.turn;
+    this.aimOk.innerHTML = `${ICON.check}<span></span>`;
+    this.aimNo.innerHTML = ICON.close;
+    this.aimRot.addEventListener('click', () => this.h.rotate());
+    this.aimOk.addEventListener('click', () => this.h.aimConfirm());
+    this.aimNo.addEventListener('click', () => this.h.aimCancel());
   }
 
   // title、desc 都是函数：提示出现的那一刻才按当前语言取文字
   bindTip(el, title, desc) {
-    el.addEventListener('pointerenter', () => {
+    el.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse') return; // 手指点上去不算"移上去"，说明改在选中时弹出
       this.h.hoverSound();
       this.tooltip.innerHTML = `<b>${title()}</b><span>${desc()}</span>`;
       const r = el.getBoundingClientRect();
@@ -168,7 +235,33 @@ export class UI {
       this.tooltip.style.bottom = `${window.innerHeight - top + 10}px`;
       this.tooltip.classList.add('show');
     });
-    el.addEventListener('pointerleave', () => this.tooltip.classList.remove('show'));
+    el.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') this.tooltip.classList.remove('show'); // 手指抬起不算"移开"：触屏的说明由 showTip 自己计时收起
+    });
+  }
+
+  // 触屏上选中一个模块或工具：在它上方弹出名字、说明和用法，三秒后淡出；手指一碰小岛也会收起
+  showTip(id, desc, how) {
+    const el = this.toolEls.get(id);
+    if (!el) return;
+    this.tooltip.innerHTML = `<b>${this.toolNames.get(id)()}</b>${desc ? `<span>${desc}</span>` : ''}${how ? `<span class="how">${how}</span>` : ''}`;
+    const r = el.getBoundingClientRect();
+    const w = this.tooltip.offsetWidth;
+    const x = Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
+    // 贴在分页那一排的上面：单手版式里正好盖住头像那一排，不再多占小岛的画面
+    const top = Math.min(r.top, $('#tabrow').getBoundingClientRect().top);
+    const box = $('#ui').getBoundingClientRect();
+    this.tooltip.style.left = `${x - box.left}px`;
+    this.tooltip.style.bottom = `${box.bottom - top + 6}px`;
+    this.tooltip.classList.add('show');
+    clearTimeout(this.tipTimer);
+    this.tipTimer = setTimeout(() => this.tooltip.classList.remove('show'), 3000);
+  }
+
+  hideTip() {
+    if (!this.touch) return;
+    clearTimeout(this.tipTimer);
+    this.tooltip.classList.remove('show');
   }
 
   setThumbs(map) {
@@ -212,6 +305,135 @@ export class UI {
     }
   }
 
+  // ---------- 触屏 ----------
+
+  // 玩家这会儿用的是手指还是鼠标
+  setTouch(on) {
+    this.touch = on;
+    document.body.classList.toggle('touch', on);
+    this.tooltip.classList.remove('show');
+    if (this.tutRender) this.tutRender();
+  }
+
+  // 工具栏上方的那一条。s 为空就收起；text 一句话，bad 标红，rot、cancel 要不要转向和取消按钮，ok 是确认按钮上的字
+  setAim(s) {
+    this.lastAim = s;
+    if (!s) {
+      this.aimBar.hidden = true;
+      this.aimKey = '';
+      clearTimeout(this.aimTimer);
+      return;
+    }
+    // 单手版式里这一条挤在分页那一排，地方小：只留要紧的字（朝向、第几层、摆放时放不下的原因）
+    const text = this.dock && s.short !== undefined ? s.short : s.text;
+    const plain = !s.rot && !s.cancel && !s.ok;
+    if (plain && !text) {
+      // 没有字也没有按钮：不用出现
+      this.aimBar.hidden = true;
+      this.aimKey = '';
+      clearTimeout(this.aimTimer);
+      return;
+    }
+    this.aimBar.hidden = false;
+    // 只有一句提示、没有按钮的时候：露两秒就慢慢淡出，不一直挡着小岛。换了一句话会重新露出来
+    const key = `${plain ? 1 : 0}${text}`;
+    if (key !== this.aimKey) {
+      this.aimKey = key;
+      clearTimeout(this.aimTimer);
+      this.aimBar.classList.remove('fade');
+      this.aimBar.classList.toggle('plain', plain);
+      if (plain) this.aimTimer = setTimeout(() => this.aimBar.classList.add('fade'), 2000);
+    }
+    if (this.aimText.textContent !== text) this.aimText.textContent = text;
+    this.aimBar.classList.toggle('bad', !!s.bad);
+    this.aimRot.hidden = !s.rot;
+    this.aimNo.hidden = !s.cancel;
+    this.aimOk.hidden = !s.ok;
+    if (s.ok) this.aimOk.lastChild.textContent = s.ok;
+  }
+
+  // 窗口大小或手机方向变了：竖着拿的手机用单手版式，把居民头像、愿望和转镜头的两个按钮
+  // 挪进屏幕下方工具栏那一摞里（位置由 styles.css 里 body.dock 那几条管）；别的版式再挪回原处
+  relayout() {
+    const dock = this.phone.matches && !this.land.matches;
+    if (dock !== this.dock) {
+      this.dock = dock;
+      document.body.classList.toggle('dock', dock);
+      const cams = [$('#cam-left'), $('#cam-right')];
+      const wrap = $('#toolbar-wrap');
+      const row = $('#tabrow');
+      if (dock) {
+        // 头像那一排：居民数固定在一头，头像在剩下的地方左右滑
+        const people = $('#people');
+        people.appendChild(this.arrival);
+        people.appendChild(this.wishBox);
+        wrap.insertBefore(this.toastEl, people);
+        row.insertBefore(this.aimBar, row.firstChild); // 确认、转向、取消这几个按钮并进分页那一排，不另占一行
+        for (const b of cams) $('#cams').appendChild(b);
+      } else {
+        const ui = $('#ui');
+        this.wishBox.appendChild(this.arrival);
+        ui.insertBefore(this.wishBox, this.wishDetail);
+        ui.insertBefore(this.toastEl, this.hint.nextSibling);
+        wrap.insertBefore(this.aimBar, row);
+        const pill = $('#topbar .pill');
+        pill.insertBefore(cams[1], pill.firstChild);
+        pill.insertBefore(cams[0], cams[1]);
+      }
+      this.aimKey = '';
+      if (this.lastAim) this.setAim(this.lastAim);
+    }
+    this.renderWishDetail();
+    if (this.tutRender) this.tutRender();
+  }
+
+  // 用哪只手拿手机：常点的按钮靠那一边
+  setHand(hand) {
+    this.hand = HANDS.includes(hand) ? hand : 'right';
+    document.body.classList.toggle('hand-left', this.hand === 'left');
+    for (const b of $('#hand-seg').children) b.classList.toggle('on', b.dataset.hand === this.hand);
+  }
+
+  // 手机上居民只显示头像，点一下在屏幕上方展开他的愿望；露三秒后淡出、自己收起，不一直挡着小岛。id 为空就收起
+  openWish(id) {
+    this.openWishId = id;
+    clearTimeout(this.wishTimer);
+    this.wishDetail.classList.remove('fade');
+    this.renderWishDetail();
+    if (!id || !this.phone.matches) return;
+    this.wishTimer = setTimeout(() => {
+      this.wishDetail.classList.add('fade');
+      this.wishTimer = setTimeout(() => this.openWish(null), 900);
+    }, 3000);
+  }
+
+  renderWishDetail() {
+    const box = this.wishDetail;
+    const w = this.phone.matches ? this.wishEls.get(this.openWishId) : null;
+    for (const [id, x] of this.wishEls) x.el.classList.toggle('open', !!w && id === this.openWishId);
+    if (!w) {
+      box.hidden = true;
+      return;
+    }
+    const has = (c) => (w.el.classList.contains(c) ? ` ${c}` : '');
+    box.className = `panel${has('has-bonus')}${has('bonus-done')}${has('up')}${has('down')}${box.classList.contains('fade') ? ' fade' : ''}`;
+    box.innerHTML = '';
+    box.appendChild(w.el.querySelector('.wish-body').cloneNode(true));
+    box.hidden = false;
+  }
+
+  // 手机浏览器会把手势当成"缩放网页""下拉刷新""拖动整页"，这里拦掉；能滚动的几块照常滚
+  guardPage() {
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits')) e.preventDefault();
+      },
+      { passive: false },
+    );
+  }
+
   setUndoState(canUndo, canRedo) {
     this.undoBtn.disabled = !canUndo;
     this.redoBtn.disabled = !canRedo;
@@ -242,6 +464,31 @@ export class UI {
     $('#vol-sfx').addEventListener('change', () => this.h.clickSound());
     $('#ico-fps').innerHTML = ICON.gauge;
     $('#ico-lang').innerHTML = ICON.globe;
+    $('#ico-theme').innerHTML = ICON.moon;
+    $('#ico-hand').innerHTML = ICON.hand;
+    // 左手还是右手：只在手机版式里出现。按钮上的字在 applyLang 里填
+    const hands = $('#hand-seg');
+    hands.innerHTML = HANDS.map((x) => `<button data-hand="${x}"></button>`).join('');
+    hands.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      this.h.clickSound();
+      this.h.setHand(b.dataset.hand);
+    });
+    // 设置开着的时候，点它以外的地方就关掉
+    $('#shade').addEventListener('click', () => (panel.hidden = true));
+    this.themeMeta = document.querySelector('meta[name="theme-color"]');
+    // 界面明暗：跟着游戏里的昼夜，或者固定浅色、深色。选项在 applyLang 里填
+    $('#theme').addEventListener('change', (e) => {
+      this.h.clickSound();
+      this.h.setTheme(e.target.value);
+    });
+    // 弹窗后面的暗幕：点一下就把弹窗关掉
+    $('#scrim').addEventListener('click', () => {
+      $('#feedback').hidden = true;
+      $('#credits').hidden = true;
+      this.setFeedbackMsg('');
+    });
     $('#btn-next').innerHTML = ICON.next;
     // 曲目：随机轮播、指定一首单曲循环，或者换回合成音乐。选项在 applyLang 里填
     $('#track').addEventListener('change', (e) => {
@@ -299,11 +546,13 @@ export class UI {
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
     this.dial = $('#dial');
-    this.sunDot = $('#sun-dot');
+    this.skySun = $('#sky-sun');
+    this.skyMoon = $('#sky-moon');
     this.prosper = $('#prosper');
     this.prLv = $('#pr-lv');
     this.prFill = $('#pr-fill');
     this.prNum = $('#pr-num');
+    this.prNumS = $('#pr-num-s'); // 手机上地方小，只写数字
     this.prDelta = $('#pr-delta');
     this.prNext = $('#pr-next');
   }
@@ -328,6 +577,50 @@ export class UI {
     el.hidden = !el.textContent;
   }
 
+  // 界面明暗选了哪种。quick：玩家刚在设置里换的，很快换过去，不用等几秒
+  setThemeMode(mode, quick = false) {
+    this.themeMode = THEMES.includes(mode) ? mode : 'auto';
+    this.themeQuick = quick;
+    $('#theme').value = this.themeMode;
+  }
+
+  // 每帧调用。night：场景现在有多暗（0 白天，1 深夜）。
+  // 天黑过半以后界面在几秒钟里从浅色换成深色，天亮时再换回来；不是一直跟着天色变，
+  // 因为底色和字的颜色换到一半的时候最难认，那一段要尽快过去
+  updateTheme(night, dt) {
+    const goal = this.themeMode === 'dark' ? 1 : this.themeMode === 'light' ? 0 : night > 0.5 ? 1 : 0;
+    if (this.themeAt === goal) return;
+    const step = Math.min(dt, 0.1) / (this.themeQuick ? THEME_QUICK : THEME_FADE);
+    if (this.themeAt === null) this.themeAt = goal;
+    else this.themeAt = goal > this.themeAt ? Math.min(goal, this.themeAt + step) : Math.max(goal, this.themeAt - step);
+    const a = this.themeAt;
+    if (a === goal) this.themeQuick = false;
+    const k = ease(a);
+    const ink = ease((a - 0.44) / 0.12);
+    // 颜色几乎没变的那几帧不去动样式
+    if (a !== goal && Math.abs(k - this.themeK) < 0.003 && Math.abs(ink - this.themeInk) < 0.003) return;
+    this.themeK = k;
+    this.themeInk = ink;
+    const root = document.documentElement;
+    for (const [name, day, dark, isInk] of THEME) {
+      const f = isInk ? ink : k;
+      const v = day.map((d, i) => (i < 3 ? Math.round(d + (dark[i] - d) * f) : +(d + (dark[i] - d) * f).toFixed(3)));
+      root.style.setProperty(name, name.endsWith('-rgb') ? v.join(', ') : `${v.length > 3 ? 'rgba' : 'rgb'}(${v.join(', ')})`);
+    }
+    // 滑杆、选单这些浏览器自带的控件也跟着换
+    root.style.colorScheme = a > 0.5 ? 'dark' : 'light';
+  }
+
+  // 浏览器自己的边栏（手机底部的导航条、顶上的状态栏）和网页的底色跟着海面的颜色走，
+  // 不然到了晚上，深色的小岛下面会露出一条白天的浅蓝
+  setChrome(hex) {
+    if (hex === this.chrome) return;
+    this.chrome = hex;
+    if (this.themeMeta) this.themeMeta.content = hex;
+    document.documentElement.style.backgroundColor = hex;
+    document.body.style.backgroundColor = hex;
+  }
+
   // 帧率上限选了哪个、要不要在角落显示实际帧率
   setFpsChoice(fps, show) {
     this.fpsCap = fps;
@@ -339,7 +632,9 @@ export class UI {
 
   // 每秒一次。fps：实际帧率；hz：屏幕刷新率；scale：现在的渲染分辨率倍数（掉帧时会自动调低）
   setPerf({ fps, hz, scale }) {
-    this.hz = hz;
+    // 不少手机闲下来会自己把刷新降到 60，手指一碰又升回去；提示按见过的最高值算，不跟着来回变
+    this.hzPeak = Math.max(this.hzPeak, hz);
+    this.hz = this.hzPeak;
     if (!this.fpsEl.hidden) this.fpsEl.textContent = t('perf.fps', fps) + (scale < 1 ? `\n${t('perf.scale', Math.round(scale * 100))}` : '');
     this.refreshFpsNote();
   }
@@ -378,14 +673,14 @@ export class UI {
       this.lastRot = rot;
       this.dial.style.setProperty('--rot', `${rot}rad`);
     }
-    const sun = isDay ? sunTheta.toFixed(3) : 'night';
+    const sun = (isDay ? 'd' : 'n') + sunTheta.toFixed(3);
     if (sun === this.lastSun) return;
     this.lastSun = sun;
-    // 太阳标在罗盘外圈：东边升起，经过南边，西边落下
-    const a = Math.PI / 2 + sunTheta;
-    this.sunDot.style.left = `${22 + Math.sin(a) * 26}px`;
-    this.sunDot.style.top = `${22 - Math.cos(a) * 26}px`;
-    this.sunDot.style.opacity = isDay ? 1 : 0;
+    // 太阳骑在罗盘外圈上：东边升起，经过南边，西边落下；夜里换成月亮，标的是月光照过来的方向。
+    // 只挪当前亮着的那一个，另一个留在原地慢慢淡掉
+    (isDay ? this.skySun : this.skyMoon).style.setProperty('--a', `${(Math.PI / 2 + sunTheta).toFixed(3)}rad`);
+    this.skySun.classList.toggle('on', isDay);
+    this.skyMoon.classList.toggle('on', !isDay);
   }
 
   // 繁荣度。p：现在的繁荣度；level：等级（从 0 起）；from、to：这一级的起点和升下一级要的数；
@@ -394,10 +689,12 @@ export class UI {
     this.prLv.textContent = t('pr.level', level + 1);
     if (to === null) {
       this.prNum.textContent = t('pr.num', p, null);
+      this.prNumS.textContent = `${p}`;
       this.prFill.style.width = '100%';
       this.prNext.textContent = t('pr.done');
     } else {
       this.prNum.textContent = t('pr.num', p, to);
+      this.prNumS.textContent = `${p} / ${to}`;
       this.prFill.style.width = `${Math.max(0, Math.min(1, (p - from) / (to - from))) * 100}%`;
       this.prNext.innerHTML = `<b>${t('pr.to', to)}</b>${next.map((line) => `<span>${line}</span>`).join('')}`;
     }
@@ -409,10 +706,18 @@ export class UI {
     this.lastP = p;
   }
 
-  // 摆放前的预览：这一步会让繁荣度变多少
-  setProsperPreview(delta) {
-    this.prDelta.textContent = delta ? `${delta > 0 ? '+' : '−'}${Math.abs(delta)}` : '';
-    this.prDelta.className = `pr-delta${delta > 0 ? ' up' : delta < 0 ? ' down' : ''}`;
+  // 放下之后：繁荣度变了多少，在数字旁边弹一下，过一会儿自己消失
+  popProsper(delta) {
+    const el = this.prDelta;
+    el.textContent = `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`;
+    el.className = `pr-delta ${delta > 0 ? 'up' : 'down'}`;
+    void el.offsetWidth; // 连着弹两次时，动画从头再来
+    el.classList.add('pop');
+    clearTimeout(this.popTimer);
+    this.popTimer = setTimeout(() => {
+      el.textContent = '';
+      el.className = 'pr-delta';
+    }, 1900);
   }
 
   // 升级提示：盖在画面中间，几秒后自己消失
@@ -438,8 +743,13 @@ export class UI {
       `<div class="avatar" style="--c:${spec.look.body}"></div>` +
       `<div class="wish-body"><div class="wish-top"><b>${spec.name}</b><span class="tier"></span><span class="pips"><i></i><i></i><i></i><i class="star"></i></span></div>` +
       `<div class="wish-text">${spec.wish}</div><div class="wish-need"></div><div class="wish-bonus"></div><div class="wish-preview"></div></div>`;
-    el.addEventListener('click', () => this.h.focusResident(spec.id));
-    this.wishBox.insertBefore(el, this.arrival);
+    el.addEventListener('click', () => {
+      this.h.focusResident(spec.id);
+      this.openWish(this.openWishId === spec.id ? null : spec.id);
+    });
+    // 单手版式里那行"居民数"不在这个盒子里
+    if (this.arrival.parentNode === this.wishBox) this.wishBox.insertBefore(el, this.arrival);
+    else this.wishBox.appendChild(el);
     this.wishEls.set(spec.id, { el, spec, mood: -1, tier: 0, bonus: false });
     const b = document.createElement('div');
     b.className = 'bubble';
@@ -453,6 +763,7 @@ export class UI {
     for (const b of this.bubbleEls.values()) b.el.remove();
     this.wishEls.clear();
     this.bubbleEls.clear();
+    this.openWish(null);
   }
 
   setWishes(results) {
@@ -473,6 +784,7 @@ export class UI {
       el.querySelector('.wish-bonus').innerHTML = r.bonus ? `<em>${t(w.bonus ? 'wish.bonusDone' : 'wish.bonus')}</em>${r.bonus.text}` : '';
       this.setMood(w, r.tier);
     }
+    this.renderWishDetail();
   }
 
   // 列表底部的一行小字：还有没有新居民要来
@@ -507,6 +819,7 @@ export class UI {
         this.setMood(w, w.tier);
       }
     }
+    if (this.openWishId) this.renderWishDetail();
   }
 
   celebrate(id) {
@@ -674,6 +987,12 @@ export class UI {
   // from：从第几步开始（老玩家只需要看新加的最后一步）
   showTutorial(onDone, from = 0) {
     const box = $('#tutorial');
+    // 触屏的说法不一样；其中"居民在哪"那一步只有手机版式才换
+    const tutSteps = () => {
+      if (!this.touch) return t('tut');
+      if (this.dock) return t('tut.dock');
+      return t('tut.touch').map((s, k) => (k === 3 && !this.phone.matches ? t('tut')[3] : s));
+    };
     let i = from < 0 ? t('tut').length + from : from;
     const done = () => {
       box.hidden = true;
@@ -681,7 +1000,7 @@ export class UI {
       if (onDone) onDone();
     };
     const render = () => {
-      const steps = t('tut');
+      const steps = tutSteps();
       const [title, text] = steps[i];
       const last = i === steps.length - 1;
       box.innerHTML =

@@ -102,7 +102,6 @@ const dict = {
   'start.sub': 'A little island, built at your own pace',
   'start.btn': 'Start building',
   'start.tip': 'Best with sound on',
-  'start.touch': "This game is made for computers for now. On phones and tablets the screen gets cramped and touch controls aren't tuned yet, so please open it on a computer.",
   fatal: (msg) => `The game couldn't start.\n${msg}`,
 
   // ---------- top bar and settings ----------
@@ -117,6 +116,13 @@ const dict = {
   'set.sfx': 'Sound',
   'set.fps': 'Max FPS',
   'set.lang': 'Language',
+  'set.theme': 'Theme',
+  'set.hand': 'Hand',
+  'hand.left': 'Left',
+  'hand.right': 'Right',
+  'theme.auto': 'Follow day and night',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
   'set.showFps': 'Show FPS in the corner',
   'set.reset': 'Start over',
   'set.resetConfirm': 'Click again to confirm',
@@ -146,7 +152,7 @@ const dict = {
   'fb.pick': 'Please pick a type at the top first',
   'fb.short': 'Please write a little more',
   'fb.wait': 'You just sent one. Please wait a moment.',
-  'set.fpsNote': (hz) => `This screen refreshes about ${hz} times a second, so FPS tops out at ${hz}`,
+  'set.fpsNote': (hz) => `The browser refreshes at most ${hz} times a second on this screen, so FPS tops out at ${hz}`,
   'music.shuffle': 'Shuffle',
   'music.synth': 'Original synth music',
   'music.next': 'Next track',
@@ -224,6 +230,23 @@ const dict = {
   'hint.facing': (d) => `Facing ${DIR[d]}`,
   'hint.floor': (n) => `Floor ${n}`,
   'hint.drop': 'Release to drop',
+  'aim.tap': 'Tap where you want it',
+  'aim.paint': 'Tap to place. Keep tapping for more',
+  'aim.remove': 'Tap what you want to remove',
+  'aim.again': 'Tap again to place',
+  'aim.againRemove': 'Tap again to remove',
+  'aim.box': 'Drag across the things you want to move',
+  'aim.dragSel': 'Drag to move, ↻ to turn, then tap Confirm',
+  'aim.confirm': 'Confirm',
+  'toast.pend': 'Drag the boxed area to move it and ↻ to turn it. Nothing changes until you tap Confirm',
+  'aim.drop': 'Lift your finger to drop',
+  'aim.ok': 'Place',
+  'aim.okRemove': 'Remove',
+  'aim.rot': 'Turn',
+  'aim.no': 'Cancel',
+  'desc.balcony.touch': 'Goes on the outer wall of a room on floor 2 or higher. Tap the wall you want it on, or use ↻ to change which way it faces.',
+  'desc.road.touch': 'Tap to lay one tile at a time. Doors open toward paths.',
+  'desc.field.touch': 'Tap to till one tile at a time.',
   'hint.box': 'Hold and drag to box off what to move',
   'hint.moveOrRotate': 'Drag to move · R to rotate',
   'res.oops': 'Whoa!',
@@ -250,7 +273,7 @@ const dict = {
   'why.wallBlocked': 'This wall is blocked by the building next door',
   'why.moveOff': 'That would move things off the island',
   'why.moveDockWater': 'A dock has to sit on water',
-  'why.moveWater': "That's water, so it won't fit",
+  'why.moveWater': "It can't go on the water",
   'why.moveTaken': "There's already something there",
   'why.balconyWouldBlock': 'A balcony would end up blocked',
 
@@ -359,5 +382,22 @@ COMPASS.forEach((d, i) => (dict[`compass.${i}`] = d));
 for (const [id, v] of Object.entries(NAME)) dict[`name.${id}`] = v;
 for (const [id, v] of Object.entries(DESC)) dict[`desc.${id}`] = v;
 for (const [id, v] of Object.entries(RES)) ['name', 'wish', 'ask', 'almost', 'happy'].forEach((k, i) => (dict[`res.${id}.${k}`] = v[i]));
+
+// 触屏版的新手提示：标题和电脑版一样，提到键盘鼠标的几步换了说法
+// One-handed layout for a phone held upright: faces and camera buttons sit above the bar
+dict['tut.dock'] = [
+  [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
+  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows above the bar turn the camera. Use ↻ to rotate a piece before placing it. Move and Remove sit at one end of the bar. If you hold your phone in your left hand, switch to Left in Settings.'],
+  dict.tut[2],
+  [dict.tut[3][0], "The faces above the bar are your residents. Tap one and their wish appears at the top of the screen, then tucks itself away after a few seconds. Watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
+  dict.tut[4],
+];
+dict['tut.touch'] = [
+  [dict.tut[0][0], 'Pick a piece from the bar below, tap the island to choose a spot, then tap again to put it down. Pieces come in two pages, "Buildings" and "Ground"; swipe the bar to see more. Paths, gardens and trees go down with a single tap.'],
+  [dict.tut[1][0], 'Drag with one finger to move around and pinch to zoom. The two arrows at the top right turn the camera. Use ↻ to rotate a piece before placing it. Move and Remove sit at one end of the bar.'],
+  dict.tut[2],
+  [dict.tut[3][0], "The faces at the top are your residents. Tap one to see their wish, and watch their faces before you place something. Once everyone has a home, someone new will arrive. You can't fail here, so take your time."],
+  dict.tut[4],
+];
 
 export default dict;

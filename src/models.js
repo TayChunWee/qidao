@@ -1,5 +1,5 @@
 // 用代码生成所有模型。每个零件合并成一个带顶点色的网格，窗户等发光部分单独一个网格。
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.min.js';
 import { C, H, BODY, HALF, DIRS, DIR_RY, opp, SIZE, rand01 } from './config.js';
 
 const _m = new THREE.Matrix4();

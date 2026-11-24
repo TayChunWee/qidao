@@ -9,6 +9,11 @@ window.__booted = true;
 const bootMsg = document.getElementById('fatal');
 if (bootMsg.dataset.boot) bootMsg.hidden = true;
 
+// 手机上页面在后台放久了，系统会把画面用的显存收走。收走时先拦一下，等还回来就重新加载（进度有存档）
+const canvas = document.getElementById('scene');
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+canvas.addEventListener('webglcontextrestored', () => window.location.reload());
+
 function fatal(msg) {
   const el = document.getElementById('fatal');
   el.hidden = false;

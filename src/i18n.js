@@ -41,5 +41,11 @@ export function t(key, ...args) {
   return v === undefined ? key : v;
 }
 
+// 模块的说明。有几句提到了键盘鼠标的，另有一份给触屏用的写法（键名后面带 .touch）
+export function descOf(id, touch) {
+  const key = `desc.${id}.touch`;
+  return t(touch && (DICT[cur][key] !== undefined || zh[key] !== undefined) ? key : `desc.${id}`);
+}
+
 // 模块的名字
 export const nameOf = (id) => t(`name.${id}`);

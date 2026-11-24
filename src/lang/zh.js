@@ -99,7 +99,6 @@ const dict = {
   'start.sub': '一座慢慢盖起来的小岛',
   'start.btn': '开始建造',
   'start.tip': '建议打开声音',
-  'start.touch': '这个游戏目前只为电脑做了适配。手机和平板上画面会挤在一起，触屏操作也还没调好，建议换电脑打开。',
   fatal: (msg) => `游戏没能启动。\n${msg}`,
 
   // ---------- 顶部和设置 ----------
@@ -114,6 +113,13 @@ const dict = {
   'set.sfx': '音效',
   'set.fps': '帧率',
   'set.lang': '语言',
+  'set.theme': '界面',
+  'set.hand': '单手',
+  'hand.left': '左手',
+  'hand.right': '右手',
+  'theme.auto': '跟随昼夜',
+  'theme.light': '浅色',
+  'theme.dark': '深色',
   'set.showFps': '在角落显示帧率',
   'set.reset': '重新开始',
   'set.resetConfirm': '再点一次确认',
@@ -143,7 +149,7 @@ const dict = {
   'fb.pick': '先在上面选一下是哪一类',
   'fb.short': '再多写几个字吧',
   'fb.wait': '刚发过一条，稍等一会儿再发',
-  'set.fpsNote': (hz) => `这块屏幕每秒刷新约 ${hz} 次，帧率最高到 ${hz}`,
+  'set.fpsNote': (hz) => `浏览器在这块屏幕上每秒最多刷新 ${hz} 次，帧率最高到 ${hz}`,
   'music.shuffle': '随机轮播',
   'music.synth': '原来的合成音乐',
   'music.next': '下一首',
@@ -217,12 +223,29 @@ const dict = {
   'toast.locked': (need, name) => `繁荣度达到 ${need} 才能解锁「${name}」`,
   'toast.tier': (name, tier) => `${name}：${tier}`,
   'toast.bonusDone': (name) => `${name}的新想法实现了`,
-  'toast.rotBlocked': (reason) => `转过来放不下：${reason}。先搬到空一点的地方再转`,
+  'toast.rotBlocked': (reason) => `转过来放不下（${reason}），先搬到空一点的地方再转`,
   'toast.selected': '圈好了。拖动圈住的区域整块搬走，按 R 整块旋转',
   'hint.nothing': '这里没有东西可拆',
   'hint.facing': (d) => `朝${DIR[d]}`,
   'hint.floor': (n) => `第 ${n} 层`,
   'hint.drop': '松手放下',
+  'aim.tap': '点一下想放的位置',
+  'aim.paint': '点一下就放下，可以连着点',
+  'aim.remove': '点一下想拆的东西',
+  'aim.again': '再点一次放下',
+  'aim.againRemove': '再点一次拆掉',
+  'aim.box': '用手指拖出一块区域，圈住要搬的东西',
+  'aim.dragSel': '拖动来搬，↻ 转向，按「确定」才生效',
+  'aim.confirm': '确定',
+  'toast.pend': '拖动圈住的区域来搬，↻ 整块转向。按「确定」才真的搬过去',
+  'aim.drop': '松手放下',
+  'aim.ok': '放下',
+  'aim.okRemove': '拆掉',
+  'aim.rot': '转向',
+  'aim.no': '取消',
+  'desc.balcony.touch': '装在二层以上房间的外墙上。点哪面墙就装在哪面，也可以按 ↻ 换朝向。',
+  'desc.road.touch': '点一下铺一格。门会朝着路开。',
+  'desc.field.touch': '点一下开垦一格。',
   'hint.box': '按住拖动，圈出要搬的一块',
   'hint.moveOrRotate': '拖动搬走 · 按 R 旋转',
   'res.oops': '哎呀！',
@@ -249,7 +272,7 @@ const dict = {
   'why.wallBlocked': '这面墙被隔壁挡住了',
   'why.moveOff': '挪到小岛外面去了',
   'why.moveDockWater': '码头要放在水面上',
-  'why.moveWater': '这里是水面，放不下',
+  'why.moveWater': '不能放在水面上噢~',
   'why.moveTaken': '那边已经有东西了',
   'why.balconyWouldBlock': '有阳台会被挡住',
 
@@ -359,5 +382,22 @@ DIR.forEach((d, i) => (dict[`compass.${i}`] = d));
 for (const [id, v] of Object.entries(NAME)) dict[`name.${id}`] = v;
 for (const [id, v] of Object.entries(DESC)) dict[`desc.${id}`] = v;
 for (const [id, v] of Object.entries(RES)) ['name', 'wish', 'ask', 'almost', 'happy'].forEach((k, i) => (dict[`res.${id}.${k}`] = v[i]));
+
+// 触屏版的新手提示：标题和电脑版一样，提到键盘鼠标的几步换了说法
+// 竖着拿手机的单手版式：头像和转镜头的按钮在工具栏上方
+dict['tut.dock'] = [
+  [dict.tut[0][0], '在下方选一个模块，点一下小岛选好位置，再点一次把它放下。模块分「建筑」和「地面」两页，左右滑动能看到更多。路、花园和树点一下就直接放下。'],
+  [dict.tut[1][0], '单指拖动可以移动画面，双指捏合缩放，工具栏上方的两个箭头转动镜头。摆放时按 ↻ 换朝向。工具栏的一端是搬动和拆除。用左手拿手机的话，可以在设置里换成左手。'],
+  dict.tut[2],
+  [dict.tut[3][0], '工具栏上方的头像是岛上的居民，点一下，他的愿望会出现在屏幕上方，过几秒自己收起。摆放前留意他们的表情。大家都住下以后，会有新居民上岛。这里没有失败，慢慢来。'],
+  dict.tut[4],
+];
+dict['tut.touch'] = [
+  [dict.tut[0][0], '在下方选一个模块，点一下小岛选好位置，再点一次把它放下。模块分「建筑」和「地面」两页，左右滑动能看到更多。路、花园和树点一下就直接放下。'],
+  [dict.tut[1][0], '单指拖动可以移动画面，双指捏合缩放，右上角的两个箭头转动镜头。摆放时按 ↻ 换朝向。工具栏的一端是搬动和拆除。'],
+  dict.tut[2],
+  [dict.tut[3][0], '上方的头像是岛上的居民，点一下能看到他的愿望。摆放前留意他们的表情。大家都住下以后，会有新居民上岛。这里没有失败，慢慢来。'],
+  dict.tut[4],
+];
 
 export default dict;

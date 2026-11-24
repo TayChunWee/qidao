@@ -1,6 +1,6 @@
 // 居民小人：在岛上走动，到点了上阳台、照看花园，夜里回家。行为只读取 World 和愿望评估结果。
 import { t } from './i18n.js';
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.min.js';
 import { SIZE, H, DIRS, DIR_RY } from './config.js';
 import { buildResident } from './models.js';
 import { START_CENTER } from './world.js';
