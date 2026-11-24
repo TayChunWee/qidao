@@ -550,11 +550,14 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
   .pr-delta.up { background: #e2f0da; color: #4f8a42; }
   .pr-delta.down { background: #f8ddd5; color: #b9543f; }
 
-  /* 居民数：钉在小岛等级下面，和它隔开一段（等级展开时正好落在这段空当里）；不跟着卡片滚动 */
-  #wishes .arrival { position: fixed; left: 16px; top: 86px; margin: 0; }
+  /* 居民数：钉在小岛等级下面，和它隔开一段（等级展开时正好落在这段空当里）；不跟着卡片滚动。
+     后面那句说明收起来，光标指上去才浮现；有新居民在路上时，留一个一闪一闪的小绿点 */
+  #wishes .arrival { position: fixed; left: 16px; top: 86px; margin: 0; pointer-events: auto; cursor: default; }
+  #wishes .arrival span { display: none; }
+  #wishes .arrival.coming::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: pulse 1.4s ease-in-out infinite; }
 
   /* 这一列本身不挡鼠标（#ui 上关掉了），所以可以留出展开后的宽度；卡片展开时盖在工具栏上面 */
-  #wishes { top: 114px; z-index: 2; width: calc(var(--wish-open) + 44px); max-height: calc(100% - 218px - var(--tool)); padding-top: 6px; }
+  #wishes { top: 126px; z-index: 2; width: calc(var(--wish-open) + 44px); max-height: calc(100% - 230px - var(--tool)); padding-top: 4px; }
   .wish, .wish.compact { width: var(--wish-w); padding: 7px 12px 7px 10px; gap: 10px; align-items: flex-start; }
   .wish:hover { width: var(--wish-open); }
   .wish .avatar { width: 30px; height: 30px; }
@@ -568,6 +571,9 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
   .wish .wish-preview { right: 10px; top: 12px; }
   .wish > .wish-body > :last-child { margin-bottom: 0; }
 
+  /* 时钟和指南针往左让一点，指南针外圈上的太阳、月亮不去碰右边那排按钮 */
+  .compass { margin-right: 8px; }
+
   /* 搬动的确认条出现时，提示条往上让一让 */
   body.aiming #toast { bottom: calc(var(--tool) + 150px); }
 }
@@ -575,7 +581,7 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
 
 /* 窗口够宽时工具栏碰不到左边这一列，这一列就一直排到底 */
 @media (min-width: 1400px) and (min-height: 501px) {
-  #wishes { max-height: calc(100% - 114px); }
+  #wishes { max-height: calc(100% - 126px); }
 }
 @media (min-width: 701px) and (max-width: 820px) and (min-height: 501px) {
   :root { --wish-w: 196px; --wish-open: 250px; }

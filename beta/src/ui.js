@@ -790,11 +790,12 @@ export class UI {
     this.renderWishDetail();
   }
 
-  // 列表底部的一行小字：还有没有新居民要来
+  // 居民数，以及还有没有新居民要来。电脑版式里那句说明收起来了，光标指上去才浮现（和繁荣度一样用浏览器自带的提示）
   setArrival(state, n, max) {
     this.lastArrival = [state, n, max];
     this.arrival.className = `arrival show ${state}`;
     this.arrival.innerHTML = `<b>${t('arrival.count', n, max)}</b><span>${t(`arrival.${state}`)}</span>`;
+    this.arrival.title = t(`arrival.${state}`);
   }
 
   setMood(w, mood) {
