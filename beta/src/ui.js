@@ -320,6 +320,7 @@ export class UI {
     this.lastAim = s;
     if (!s) {
       this.aimBar.hidden = true;
+      document.body.classList.remove('aiming');
       this.aimKey = '';
       clearTimeout(this.aimTimer);
       return;
@@ -330,11 +331,13 @@ export class UI {
     if (plain && !text) {
       // 没有字也没有按钮：不用出现
       this.aimBar.hidden = true;
+      document.body.classList.remove('aiming');
       this.aimKey = '';
       clearTimeout(this.aimTimer);
       return;
     }
     this.aimBar.hidden = false;
+    document.body.classList.add('aiming'); // 电脑版式里，提示条要给这一条让位
     // 只有一句提示、没有按钮的时候：露两秒就慢慢淡出，不一直挡着小岛。换了一句话会重新露出来
     const key = `${plain ? 1 : 0}${text}`;
     if (key !== this.aimKey) {
