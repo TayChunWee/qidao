@@ -873,7 +873,7 @@ export class View {
     }
   }
 
-  // 整块搬动的预览（触屏）：把这些格子上的东西抬起来，摆到各自的新位置、转好方向；世界本身还没改。
+  // 整块搬动的预览：把这些格子上的东西抬起来，摆到各自的新位置、转好方向；世界本身还没改。
   // pairs：[{ from, to }]；turns：顺时针一共转了几个 90°（一直累加，转起来才顺）
   setCarry(rect, state, pairs, turns) {
     const shown = this.selGroup.visible;
@@ -927,6 +927,19 @@ export class View {
     this.lifted = [];
     this.selOff.set(0, 0, 0);
     this.selGoal.set(0, 0, 0);
+  }
+
+  // 鼠标是不是指着正被抬着的那些东西（按各自的包围盒算）
+  hitsLifted(clientX, clientY) {
+    if (!this.lifted.length) return false;
+    const r = this.canvas.getBoundingClientRect();
+    this.ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    const box = this.liftBox || (this.liftBox = new THREE.Box3());
+    return this.lifted.some((l) => {
+      box.setFromObject(l.g);
+      return !box.isEmpty() && this.raycaster.ray.intersectsBox(box);
+    });
   }
 
   // 整块放下以后，落地的东西一起压一下
