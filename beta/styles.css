@@ -537,7 +537,8 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
 
   /* 小岛等级：平时只有等级、进度条和数字；指上去才写出下一级会带来什么 */
   #prosper { left: 16px; top: 16px; transform: none; z-index: 3; width: var(--wish-w); max-width: none; padding: 9px 14px 10px; }
-  #prosper:hover { width: var(--wish-open); }
+  /* 展开时往右长，尽量只多出一行，免得盖住下面的居民数 */
+  #prosper:hover { width: max-content; min-width: var(--wish-w); max-width: calc(100vw - 32px); }
   #prosper.bump { animation: bump-s 0.5s var(--spring); }
   .pr-bar { min-width: 30px; }
   #pr-num, .pr-next { display: none; }
@@ -549,8 +550,11 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
   .pr-delta.up { background: #e2f0da; color: #4f8a42; }
   .pr-delta.down { background: #f8ddd5; color: #b9543f; }
 
+  /* 居民数：钉在小岛等级下面，和它隔开一段（等级展开时正好落在这段空当里）；不跟着卡片滚动 */
+  #wishes .arrival { position: fixed; left: 16px; top: 86px; margin: 0; }
+
   /* 这一列本身不挡鼠标（#ui 上关掉了），所以可以留出展开后的宽度；卡片展开时盖在工具栏上面 */
-  #wishes { top: 58px; z-index: 2; width: calc(var(--wish-open) + 44px); max-height: calc(100% - 162px - var(--tool)); padding-top: 8px; }
+  #wishes { top: 114px; z-index: 2; width: calc(var(--wish-open) + 44px); max-height: calc(100% - 218px - var(--tool)); padding-top: 6px; }
   .wish, .wish.compact { width: var(--wish-w); padding: 7px 12px 7px 10px; gap: 10px; align-items: flex-start; }
   .wish:hover { width: var(--wish-open); }
   .wish .avatar { width: 30px; height: 30px; }
@@ -571,7 +575,7 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
 
 /* 窗口够宽时工具栏碰不到左边这一列，这一列就一直排到底 */
 @media (min-width: 1400px) and (min-height: 501px) {
-  #wishes { max-height: calc(100% - 58px); }
+  #wishes { max-height: calc(100% - 114px); }
 }
 @media (min-width: 701px) and (max-width: 820px) and (min-height: 501px) {
   :root { --wish-w: 196px; --wish-open: 250px; }
