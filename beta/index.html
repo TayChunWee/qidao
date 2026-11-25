@@ -67,6 +67,7 @@
     <div class="s-row phone-only"><span class="s-icon" id="ico-hand"></span><span data-i18n="set.hand"></span><div class="seg" id="hand-seg"></div></div>
     <div class="s-row"><span class="s-icon" id="ico-lang"></span><span data-i18n="set.lang"></span><select id="lang"></select></div>
     <div class="s-btns">
+      <button class="text-btn plain" id="btn-backup" data-i18n="set.backup"></button>
       <button class="text-btn plain" id="btn-feedback" data-i18n="set.feedback" hidden></button>
       <button class="text-btn plain" id="btn-credits" data-i18n="set.credits"></button>
     </div>
@@ -87,6 +88,13 @@
     <input type="email" id="fb-contact" maxlength="120" autocomplete="email" data-i18n-ph="fb.contact">
     <p class="s-note" data-i18n="fb.note"></p>
     <div class="tut-foot"><span class="fb-msg" id="fb-msg"></span><button class="tut-skip" id="fb-cancel" data-i18n="fb.cancel"></button><button class="tut-next" id="fb-send" data-i18n="fb.send"></button></div>
+  </div>
+  <div class="panel" id="backup" hidden>
+    <h3 data-i18n="bk.title"></h3>
+    <div class="seg" id="bk-mode"><button data-mode="out" data-i18n="bk.out"></button><button data-mode="in" data-i18n="bk.in"></button></div>
+    <p class="s-note" id="bk-note"></p>
+    <textarea id="bk-text" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+    <div class="tut-foot"><span class="fb-msg" id="bk-msg"></span><button class="tut-skip" id="bk-close" data-i18n="cr.close"></button><button class="tut-next" id="bk-go"></button></div>
   </div>
   <div class="panel" id="credits" hidden>
     <h3 data-i18n="cr.title"></h3>
