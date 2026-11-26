@@ -2,9 +2,9 @@
 import { FPS_CHOICES } from './perf.js';
 import { World, SOLIDS, SOLO, GROUNDS, START_CENTER } from './world.js';
 import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS } from './wishes.js';
-import { MODULES, TABS, H, DAY_LENGTH, SIZE, MAX_LEVEL, VERSION } from './config.js';
+import { MODULES, TABS, H, DAY_LENGTH, SIZE, MAX_LEVEL, PAINTS, VERSION } from './config.js';
 import { t, nameOf, descOf, getLang, setLang } from './i18n.js';
-import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf } from './progression.js';
+import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf, expandUnlock } from './progression.js';
 import { thumbParts } from './viewmodel.js';
 import { Resident, arrivalCell, walkable } from './residents.js';
 import { UI } from './ui.js';
@@ -13,7 +13,7 @@ import { sendFeedback } from './feedback.js';
 import { encodeSave, decodeSave } from './savecode.js';
 
 const SAVE_KEY = 'qidao-save-v2';
-const SAVE_V = 3;
+const SAVE_V = 4; // 4：建筑有了墙色和顶色
 
 // 玩家贴进来的存档可能是别人给的，也可能被改过：不照单全收，只把认识的内容一样样重新抄一遍，
 // 有一处看不懂就整份不要。返回的是可以直接存进浏览器的存档
@@ -32,10 +32,15 @@ function cleanSave(raw) {
     if (c[0] !== 0 && !GROUNDS.includes(c[0])) bad();
     const s = c[1].map((b) => {
       if (!Array.isArray(b) || !SOLIDS.includes(b[0]) || ![0, 1, 2, 3].includes(b[1]) || !/^[01]{4}$/.test(b[2])) bad();
-      return [b[0], b[1], b[2]];
+      if (b[3] === undefined || b[3] === 0) return [b[0], b[1], b[2]];
+      if (!PAINTS.includes(b[3])) bad();
+      return [b[0], b[1], b[2], b[3]];
     });
     if (s.length > 1 && s.some((b) => own(SOLO, b[0]))) bad();
-    return c[0] || s.length ? [c[0], s] : 0;
+    if (!c[0] && !s.length) return 0;
+    if (c[2] === undefined || !s.length) return [c[0], s];
+    if (!PAINTS.includes(c[2])) bad();
+    return [c[0], s, c[2]];
   });
   const seen = new Set();
   const roster = [];
@@ -45,11 +50,17 @@ function cleanSave(raw) {
     const b = r.bonus;
     let bonus = null;
     if (b && (b.k === 'friend' || b.k === 'avoid') && own(ARCHETYPES, b.id)) bonus = { k: b.k, id: b.id };
-    else if (b && b.k === 'near' && own(MODULES, b.type) && Number.isInteger(b.r) && b.r > 0 && b.r < 9) bonus = { k: 'near', type: b.type, r: b.r };
+    else if (b && b.k === 'near' && own(MOD, b.type) && Number.isInteger(b.r) && b.r > 0 && b.r < 9) bonus = { k: 'near', type: b.type, r: b.r };
+    else if (b && b.k === 'wall' && PAINTS.includes(b.c)) bonus = { k: 'wall', c: b.c };
     roster.push({ id: r.id, bonus, happy: Number.isFinite(r.happy) && r.happy > 0 ? Math.min(r.happy, 1e6) : 0 });
   }
   const save = { v: SAVE_V, world: JSON.stringify(world), level: raw.level, t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0, roster, done: !!raw.done };
-  new World(stageFor(save.level)).load(save.world); // 真的摆一遍，摆不出来的也不要
+  const trial = new World(stageFor(save.level));
+  trial.load(save.world); // 真的摆一遍，摆不出来的也不要
+  if (!(raw.v >= 4)) {
+    trial.legacyRoofs(); // 没有颜色的旧存档：高楼的屋顶照原来的样子补上颜色
+    save.world = trial.serialize();
+  }
   return save;
 }
 const TAP_SLOP = 10; // 触屏上手指挪动不超过这么多像素，还算"点了一下"
@@ -280,6 +291,7 @@ export class Game {
       const level = Math.min(MAX_LV, Math.max(0, data.level | 0));
       const world = new World(stageFor(level));
       world.load(data.world);
+      if (!(data.v >= 4)) world.legacyRoofs(); // 没有颜色的旧存档：高楼的屋顶照原来的样子补上颜色
       this.world = world;
       this.level = level;
       this.done = !!data.done;
@@ -559,7 +571,7 @@ export class Game {
     const fresh = [];
     const lines = [];
     for (let lv = this.level + 1; lv <= target; lv++) {
-      fresh.push(...LEVELS[lv].unlock);
+      fresh.push(...expandUnlock(LEVELS[lv].unlock));
       lines.push(...rewardsOf(lv));
     }
     this.level = target;
@@ -627,7 +639,7 @@ export class Game {
     // 触屏上没有"鼠标移上去看说明"：选中的时候在按钮上方弹出说明和用法，几秒后自己淡出
     if (this.touch && this.started) {
       if (!this.tool) this.ui.hideTip();
-      else if (m) this.ui.showTip(id, descOf(id, true), t(m.paint ? 'aim.paint' : 'aim.tap'));
+      else if (m) this.ui.showTip(id, descOf(id, true), t(m.brush ? 'aim.brush' : m.paint ? 'aim.paint' : 'aim.tap'));
       else this.ui.showTip(id, '', t(id === 'move' ? 'aim.box' : 'aim.remove'));
     }
     this.refreshHover();
@@ -704,6 +716,14 @@ export class Game {
       return { kind: 'place', type: 'balcony', x, z, level, dir, rot: true, valid: r.ok, reason: r.reason };
     }
 
+    // 粉刷：刷墙时指着哪一层就刷哪一层，刷屋顶不管指着哪儿都是这栋楼的顶
+    const m = MOD[tool];
+    if (m && m.brush) {
+      const level = m.brush === 'roof' ? Math.max(0, c.s.length - 1) : pick.level;
+      const p = this.world.checkPaint(m.brush, x, z, level, m.color);
+      return { kind: 'paint', type: tool, brush: m.brush, color: m.color, x, z, level, valid: p.ok, reason: p.reason };
+    }
+
     const r = this.world.check(tool, x, z);
     const level = r.ok ? r.level : SOLIDS.includes(tool) ? Math.min(this.world.heightOf(c), 4) : 0;
     const dir = tool === 'dock' ? this.world.dockDir(x, z) : this.rot;
@@ -760,6 +780,7 @@ export class Game {
   // 预览旁边的一句话：放不了的原因，或者朝向、第几层
   hoverText(h) {
     if (!h.valid) return h.reason;
+    if (h.kind === 'paint') return h.brush === 'wall' && this.world.cell(h.x, h.z).s.length > 1 ? t('hint.floor', h.level + 1) : '';
     if (h.type === 'balcony') return `${t('hint.facing', h.dir)} · ${t('hint.floor', h.level + 1)}`;
     if (h.kind === 'place' && h.rot) return t('hint.facing', h.dir);
     if (h.kind === 'place' && h.level >= 1) return t('hint.floor', h.level + 1);
@@ -780,6 +801,7 @@ export class Game {
 
   applyTo(w, h) {
     if (h.kind === 'place') w.apply(h.type, h.x, h.z, { level: h.level, dir: h.dir });
+    else if (h.kind === 'paint') w.paint(h.brush, h.x, h.z, h.level, h.color);
     else if (h.kind === 'removeBalcony') w.removeBalcony(h.x, h.z, h.level, h.dir);
     else w.remove(h.x, h.z);
   }
@@ -800,6 +822,7 @@ export class Game {
     }
     this.applyTo(this.world, h);
     if (h.kind === 'place') this.audio.place(h.level, !SOLIDS.includes(h.type));
+    else if (h.kind === 'paint') this.audio.place(h.level, true);
     else this.audio.remove();
     this.commit('place');
     return true;

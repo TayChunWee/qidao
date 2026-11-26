@@ -4,6 +4,8 @@ const COMPASS = ['N', 'E', 'S', 'W'];
 // Distances are counted in rings around a tile, so diagonals count as one tile too.
 const tiles = (r) => (r === 1 ? '1 tile' : `${r} tiles`);
 const count = (n, one, many) => (n === 1 ? one : `${n} ${many}`);
+const COLOR = ['white', 'red', 'yellow', 'green', 'blue', 'purple'];
+const Color = (k) => COLOR[k][0].toUpperCase() + COLOR[k].slice(1);
 
 const NAME = {
   room: 'Room',
@@ -24,6 +26,7 @@ const NAME = {
   greenhouse: 'Greenhouse',
   windmill: 'Windmill',
   lighthouse: 'Lighthouse',
+  paint: 'Paint',
 };
 const lower = (type) => NAME[type].toLowerCase();
 
@@ -93,6 +96,12 @@ const RES = {
   yin: ['Lyric', 'Wants to write poems beside a gazebo', 'I want to live by a gazebo and sit in it writing poems.', 'Water and trees, and the lines come by themselves. If only it were a little quieter nearby.', 'So quiet you can hear the leaves fall. I wrote three poems today.'],
   fu: ['Lucky', 'Wants to live beside the market', 'I run a stall. I want to live by the market and open up the moment I step out.', "Sold out again today! One more shop next door and we'd have a whole street.", "Market and shop side by side. The whole street's calling out their wares!"],
   di: ['Piper', 'Wants a balcony for playing the flute in peace', "I'd like a balcony to play my flute on in the evening, somewhere not too noisy.", 'Water and flute go so well together. With a gazebo below, people could sit and listen.', "The gazebo's full of people listening to my flute."],
+  cai: ['Sketch', "Wants a room that isn't the same color as the neighbors'", "I'm a painter. I'd like to live next to neighbors, but my walls need a color of their own.", "You can tell my place at a glance! Now if only my roof were a color nobody else on the island has…", 'The only roof of this color on the whole island. It feels like a signature.'],
+  qi: ['Tidy', 'Wants walls the same color as next door', 'I like things neat. Give me a cottage by a path, painted the same color as next door.', "Same color as next door. So pleasing. If our roofs joined up too, in something brighter, that'd be perfect.", 'Matching walls and one long roof. Neat as can be!'],
+  hong: ['Iris', 'Wants a balcony looking out on roofs of many colors', "I'd like a north-facing balcony that looks out on roofs of all colors.", 'What a lively view! It would be even better if my own walls were yellow.', 'Yellow walls and a rainbow of roofs. My whole mood has brightened.'],
+  lan: ['Old Blue', 'Wants to live by the water with a blue roof in sight', 'I spent half my life on boats. Give me a cottage near the water, with a blue roof close by.', 'That blue roof looks like the sea. If my own roof were white, it would be like a sail.', "A white roof beside a blue one, like sail and sea. I'm home."],
+  mei: ['Auntie Plum', 'Wants a quiet room with a tree in view', "I'd like a quiet room where I can see a tree from the window.", 'So peaceful. If only the walls were red, like plum blossom.', 'Red walls against green trees, like plum blossom in bloom.'],
+  zi: ['Violet', 'Wants the top floor under a roof that stands out', 'I want to live at the very top, under a roof that is a different color from the ones next door.', "You can spot my place right away! It'd be even better if the roof were purple. That's my favorite color.", 'A purple roof. The prettiest in the whole world!'],
   deng: ['Old Beacon', 'Wants to keep a lighthouse', "I've kept lighthouses all my life. Just give me a cottage right beside one.", "The light's on every night. With a dock nearby, I could watch the boats come home.", 'The boats follow the light home and tie up safe at the dock.'],
 };
 
@@ -197,6 +206,7 @@ const dict = {
   // ---------- toolbar ----------
   'tab.build': 'Buildings',
   'tab.ground': 'Ground',
+  'tab.paint': 'Paint',
   'tab.tip': '<kbd>Tab</kbd> to switch',
   'tool.locked': (need) => `Unlocks at prosperity ${need}.`,
   'act.move': 'Move',
@@ -249,6 +259,7 @@ const dict = {
   'hint.confirm': 'Enter to confirm · Esc to cancel',
   'aim.tap': 'Tap where you want it',
   'aim.paint': 'Tap to place. Keep tapping for more',
+  'aim.brush': 'Tap a house to paint it. Keep tapping for more',
   'aim.remove': 'Tap what you want to remove',
   'aim.again': 'Tap again to place',
   'aim.againRemove': 'Tap again to remove',
@@ -289,6 +300,10 @@ const dict = {
   'why.balconyFloor': 'A balcony has to be on floor 2 or higher',
   'why.balconyTaken': 'This wall already has a balcony',
   'why.wallBlocked': 'This wall is blocked by the building next door',
+  'why.paintNothing': 'Nothing here to paint',
+  'why.paintWall': 'Only the outer walls of rooms can be painted',
+  'why.paintRoof': 'This building has no roof to paint',
+  'why.paintSame': "It's already this color",
   'why.moveOff': 'That would move things off the island',
   'why.moveDockWater': 'A dock has to sit on water',
   'why.moveWater': "It can't go on the water",
@@ -346,6 +361,20 @@ const dict = {
   'c.sunny.say': 'The buildings next door are too tall and I get no sun. Nothing over two floors within two tiles, please.',
   'c.joined.need': "Wants a room joined to a neighbor's",
   'c.joined.say': "It's a bit lonely on my own. I'd like to be next to a neighbor.",
+  'c.wallIs.need': (k) => `Wants ${COLOR[k]} walls at home`,
+  'c.wallIs.say': (k) => `If only my walls were ${COLOR[k]}.`,
+  'c.roofIs.need': (k) => `Wants a ${COLOR[k]} roof`,
+  'c.roofIs.say': (k) => `If only the roof were ${COLOR[k]}.`,
+  'c.wallUnlike.need': 'Walls have to be a different color from every room right beside it on the same floor',
+  'c.wallUnlike.say': "My walls are the same color as next door. I can't even tell which room is mine.",
+  'c.wallPair.need': 'Wants the same wall color as a room next door (white does not count)',
+  'c.wallPair.say': "I'd like to match the color next door. Plain white is too dull.",
+  'c.roofUnlike.need': 'Roof has to be a different color from every building right beside it',
+  'c.roofUnlike.say': "My roof is the same color as next door. It doesn't stand out at all.",
+  'c.roofNear.need': (k, r) => `Wants a building with a ${COLOR[k]} roof within ${tiles(r)}`,
+  'c.roofNear.say': (k) => `If only I could see a ${COLOR[k]} roof when I step outside.`,
+  'c.roofKinds.need': (n, r) => `Wants roofs in ${n} different colors within ${tiles(r)}`,
+  'c.roofKinds.say': "Every roof I can see is the same color. I'd like something livelier.",
   'c.alone.need': 'No other buildings in the ring around the house',
   'c.alone.say': "The neighbors are too close. I'd like some peace.",
   'c.fields.need': (n) => (n === 1 ? 'Needs a field next to the house' : `Wants ${n} fields next to the house`),
@@ -353,6 +382,7 @@ const dict = {
 
   // a few residents have their own way of saying the same condition
   's.tang.high': 'A bit higher would be nice. The view really opens up from floor 3.',
+  's.lan.water': "The water's too far. I can't sleep without the sound of waves.",
   's.tie.water': "Smithing takes water. I'd like to be closer to the shore.",
   's.xing.tallest': 'A building nearby is taller than the tower and blocks the stars.',
   's.doorWater': 'I want water right outside my door.',
@@ -393,10 +423,19 @@ const dict = {
   'bonus.avoid.text': (name, r) => `Wants to live farther from ${name} (${tiles(r)} apart)`,
   'bonus.avoid.say': (name) => `It's too lively over at ${name}'s. I'd like to live farther away.`,
   'bonus.avoid.done': 'Much more peaceful now.',
+  'bonus.wall.text': (k) => `Wants ${COLOR[k]} walls at home`,
+  'bonus.wall.say': (k) => `Lately I keep thinking how nice ${COLOR[k]} walls would be at home.`,
+  'bonus.wall.done': (k) => `${Color(k)} walls! I like them more every time I look.`,
   neighbor: 'a neighbor',
 };
 
 COMPASS.forEach((d, i) => (dict[`compass.${i}`] = d));
+// The twelve paint tools: names and descriptions are built from the color
+dict['name.wallPaint'] = (k) => `${Color(k)} wall`;
+dict['name.roofPaint'] = (k) => `${Color(k)} roof`;
+dict['desc.wallPaint'] = (k) => `Paints the outer walls of one room ${COLOR[k]}. Point at the floor you want. Hold and drag to paint several.`;
+dict['desc.wallPaint.touch'] = (k) => `Paints the outer walls of one room ${COLOR[k]}. Tap the floor you want.`;
+dict['desc.roofPaint'] = (k) => `Paints a building's roof ${COLOR[k]}. Only buildings with a room on top can be painted.`;
 for (const [id, v] of Object.entries(NAME)) dict[`name.${id}`] = v;
 for (const [id, v] of Object.entries(DESC)) dict[`desc.${id}`] = v;
 for (const [id, v] of Object.entries(RES)) ['name', 'wish', 'ask', 'almost', 'happy'].forEach((k, i) => (dict[`res.${id}.${k}`] = v[i]));

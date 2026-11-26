@@ -1,5 +1,5 @@
 // 游戏状态与规则。不依赖任何渲染代码。
-import { SIZE, MAX_LEVEL, DIRS, opp, hash } from './config.js';
+import { SIZE, MAX_LEVEL, DIRS, opp, hash, WALL_DEFAULT, ROOF_DEFAULT } from './config.js';
 import { t } from './i18n.js';
 
 // 可以叠高的实体块；SOLO 是独立的一座，只能建在地面，上面不能再盖（值是它相当于几层楼高）
@@ -51,8 +51,8 @@ export class World {
         const ch = MAP[z][x];
         const pond = ch >= 'a' && ch <= 'd';
         const zone = ch === '.' ? -1 : pond ? ch.charCodeAt(0) - 97 : Number(ch);
-        // g：地面物件；s：从下到上叠起来的实体块
-        this.cells[z * SIZE + x] = { zone, pond, water: zone < 0 || pond, locked: false, g: null, s: [] };
+        // g：地面物件；s：从下到上叠起来的实体块（每块的 c 是墙的颜色）；r：这栋楼屋顶的颜色
+        this.cells[z * SIZE + x] = { zone, pond, water: zone < 0 || pond, locked: false, g: null, s: [], r: ROOF_DEFAULT };
       }
     }
     this.setStage(stage);
@@ -154,14 +154,18 @@ export class World {
     } else if (GROUNDS.includes(type)) {
       c.g = { t: type };
     } else {
-      c.s.push({ t: type, d: opt.dir ?? 2, b: [0, 0, 0, 0] });
+      c.s.push({ t: type, d: opt.dir ?? 2, b: [0, 0, 0, 0], c: WALL_DEFAULT });
     }
   }
 
   remove(x, z) {
     const c = this.cell(x, z);
     if (!c) return null;
-    if (c.s.length) return c.s.pop();
+    if (c.s.length) {
+      const b = c.s.pop();
+      if (!c.s.length) c.r = ROOF_DEFAULT; // 整栋拆光了：下次在这里盖的是新楼，屋顶回到初始色
+      return b;
+    }
     if (c.g) {
       const g = c.g;
       c.g = null;
@@ -173,6 +177,39 @@ export class World {
   removeBalcony(x, z, level, dir) {
     const b = this.cell(x, z)?.s[level];
     if (b) b.b[dir] = 0;
+  }
+
+  // ---------- 粉刷 ----------
+
+  // target：'wall' 刷某一层房间的外墙，'roof' 刷整栋楼的屋顶。只有房间能刷：小店、工坊、塔楼各有各的样子，留着好认
+  checkPaint(target, x, z, level, color) {
+    const c = this.cell(x, z);
+    if (!c || !c.s.length) return fail(t('why.paintNothing'));
+    if (target === 'roof') {
+      if (c.s[c.s.length - 1].t !== 'room') return fail(t('why.paintRoof'));
+      if (c.r === color) return fail(t('why.paintSame'));
+      return ok({ level: c.s.length - 1 });
+    }
+    const b = c.s[level];
+    if (!b || b.t !== 'room') return fail(t('why.paintWall'));
+    if (b.c === color) return fail(t('why.paintSame'));
+    return ok({ level });
+  }
+
+  paint(target, x, z, level, color) {
+    const c = this.cell(x, z);
+    if (target === 'roof') c.r = color;
+    else c.s[level].c = color;
+  }
+
+  // 这栋楼坡屋顶的颜色；顶上不是房间（没有坡屋顶）的返回 -1
+  roofOf(c) {
+    return c && c.s.length && c.s[c.s.length - 1].t === 'room' ? c.r : -1;
+  }
+
+  // 旧存档里没有颜色：那时四层以上的屋顶是青蓝色的，照原样补上
+  legacyRoofs() {
+    for (const c of this.cells) if (c.s.length >= 4 && this.roofOf(c) >= 0) c.r = 4;
   }
 
   // ---------- 整块移动 ----------
@@ -233,15 +270,17 @@ export class World {
     const snap = this.serialize();
     const held = pairs.map(({ from: f }) => {
       const c = this.cell(f.x, f.z);
-      const h = { g: c.g, s: c.s };
+      const h = { g: c.g, s: c.s, r: c.r };
       c.g = null;
       c.s = [];
+      c.r = ROOF_DEFAULT;
       return h;
     });
     pairs.forEach(({ to }, i) => {
       const d = this.cell(to.x, to.z);
       d.g = held[i].g;
       d.s = held[i].s;
+      d.r = held[i].r;
       if (!turns) return;
       // 朝向和阳台跟着一起转
       for (const b of d.s) {
@@ -291,7 +330,7 @@ export class World {
   roofJoin(x, z, d) {
     const c = this.cell(x, z);
     const n = this.cell(x + DIRS[d].x, z + DIRS[d].z);
-    if (!c || !n || !c.s.length || n.s.length !== c.s.length) return false;
+    if (!c || !n || !c.s.length || n.s.length !== c.s.length || n.r !== c.r) return false; // 顶色不同的不连
     return this.connected(x, z, c.s.length - 1, d);
   }
 
@@ -361,9 +400,14 @@ export class World {
 
   // ---------- 存档 ----------
 
+  // 每格：0（空）或 [地面物件, [[类型, 朝向, 阳台, 墙色]…], 顶色]。墙色、顶色是初始色时省掉不写
   serialize() {
     return JSON.stringify(
-      this.cells.map((c) => (c.g || c.s.length ? [c.g ? c.g.t : 0, c.s.map((b) => [b.t, b.d, b.b.join('')])] : 0)),
+      this.cells.map((c) => {
+        if (!c.g && !c.s.length) return 0;
+        const s = c.s.map((b) => (b.c ? [b.t, b.d, b.b.join(''), b.c] : [b.t, b.d, b.b.join('')]));
+        return c.s.length && c.r !== ROOF_DEFAULT ? [c.g ? c.g.t : 0, s, c.r] : [c.g ? c.g.t : 0, s];
+      }),
     );
   }
 
@@ -374,9 +418,11 @@ export class World {
       if (!c) return;
       c.g = null;
       c.s = [];
+      c.r = ROOF_DEFAULT;
       if (!v) return;
       if (v[0]) c.g = { t: v[0] };
-      c.s = v[1].map(([t, d, b]) => ({ t, d, b: b.split('').map(Number) }));
+      c.s = v[1].map(([t, d, b, col]) => ({ t, d, b: b.split('').map(Number), c: col || WALL_DEFAULT }));
+      if (c.s.length && v[2] !== undefined) c.r = v[2];
     });
   }
 
@@ -387,7 +433,8 @@ export class World {
       const c = this.cells[i];
       const n = w.cells[i];
       if (c.g) n.g = { t: c.g.t };
-      if (c.s.length) n.s = c.s.map((b) => ({ t: b.t, d: b.d, b: b.b.slice() }));
+      if (c.s.length) n.s = c.s.map((b) => ({ t: b.t, d: b.d, b: b.b.slice(), c: b.c }));
+      n.r = c.r;
     }
     return w;
   }

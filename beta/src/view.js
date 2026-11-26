@@ -988,7 +988,19 @@ export class View {
       this.ghostFresh = true;
       this.hl.visible = false;
       this.marker.visible = h.valid;
-      if (h.kind === 'removeBalcony') {
+      // 拆除是红框；粉刷时框是要刷上去的那种颜色
+      const tint = h.kind === 'paint';
+      this.marker.material.color.set(tint ? (h.brush === 'wall' ? C.wallPaint : C.roofPaint)[h.color] : '#ff7a66');
+      this.marker.material.opacity = tint ? 0.62 : 0.32;
+      if (tint) {
+        if (h.brush === 'roof') {
+          this.marker.position.set(cx, (h.level + 1) * H + 0.24, cz);
+          this.marker.scale.set(1.02, 0.5, 1.02);
+        } else {
+          this.marker.position.set(cx, h.level * H + H / 2, cz);
+          this.marker.scale.set(0.9, H * 0.94, 0.9);
+        }
+      } else if (h.kind === 'removeBalcony') {
         const d = h.dir;
         this.marker.position.set(cx + DIRS[d].x * 0.58, h.level * H + 0.12, cz + DIRS[d].z * 0.58);
         this.marker.scale.set(d % 2 ? 0.38 : 0.7, 0.36, d % 2 ? 0.7 : 0.38);

@@ -54,7 +54,7 @@ export function describeCell(w, x, z, ctx = {}) {
   for (let i = 0; i < n; i++) {
     const b = c.s[i];
     const y = i * H;
-    const body = b.t === 'room' ? { tone } : b.t === 'tower' ? { lv: i % 2 } : { d: b.d };
+    const body = b.t === 'room' ? { tone, c: b.c || 0 } : b.t === 'tower' ? { lv: i % 2 } : { d: b.d };
     parts.push({ key: `b${i}`, kind: b.t, p: body, y, anim: 'drop', fall: i === 0 });
 
     const g = hash(x, z, i) % 3; // 同一间房的窗户一起亮
@@ -85,7 +85,7 @@ export function describeCell(w, x, z, ctx = {}) {
     parts.push({
       key: 'roof',
       kind: 'roof',
-      p: { lv: n, tone, n: w.roofJoin(x, z, 0), e: w.roofJoin(x, z, 1), s: w.roofJoin(x, z, 2), w: w.roofJoin(x, z, 3) },
+      p: { lv: n, tone, c: c.r, wc: top.c || 0, n: w.roofJoin(x, z, 0), e: w.roofJoin(x, z, 1), s: w.roofJoin(x, z, 2), w: w.roofJoin(x, z, 3) },
       y: n * H,
       anim: 'grow',
     });
@@ -104,6 +104,22 @@ export function describeCell(w, x, z, ctx = {}) {
 
 // 工具栏缩略图用的零件组合
 export function thumbParts(id) {
+  // 粉刷：墙色画一间没封顶的房间，顶色画一间白墙房间戴着那种颜色的屋顶
+  const brush = /^(wall|roof)(\d)$/.exec(id);
+  if (brush) {
+    const k = Number(brush[2]);
+    if (brush[1] === 'wall') {
+      return [
+        { kind: 'room', p: { tone: 0, c: k } },
+        { kind: 'win', p: { d: 2, v: 0, g: 0 } },
+        { kind: 'win', p: { d: 3, v: 2, g: 0 } },
+      ];
+    }
+    return [
+      { kind: 'room', p: { tone: 0, c: 0 } },
+      { kind: 'roof', p: { lv: 1, tone: 0, c: k, wc: 0 }, y: H },
+    ];
+  }
   switch (id) {
     case 'room':
       return [

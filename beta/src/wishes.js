@@ -6,7 +6,7 @@
 //   惊喜：连隐藏的心愿也满足
 // 每个住处只能住一位居民，按全岛居民加起来最满意的方式分配。
 // 住得满意的居民过一阵会冒出一个"新想法"（想离某样东西或某个人近一点），实现了繁荣度再加 1。
-import { SIZE, DIRS } from './config.js';
+import { SIZE, DIRS, PAINTS, ROOF_DEFAULT, WALL_DEFAULT } from './config.js';
 import { t } from './i18n.js';
 
 export const FIRST_RESIDENTS = ['tang', 'mo'];
@@ -38,6 +38,20 @@ const has = (t) => (c) => (!!c.g && c.g.t === t) || (!!c.s[0] && c.s[0].t === t)
 const NOISY = ['shop', 'workshop', 'market'];
 const noisy = (c) => !!c.s[0] && NOISY.includes(c.s[0].t);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+// 住处那一间房
+const blockAt = (w, h) => w.cell(h.x, h.z).s[h.level];
+// 同一层紧挨着的房间
+const sideRooms = (w, h) => {
+  const out = [];
+  for (const d of DIRS) {
+    const c = w.cell(h.x + d.x, h.z + d.z);
+    const b = c && c.s[h.level];
+    if (b && b.t === 'room') out.push(b);
+  }
+  return out;
+};
+// 紧挨着的楼各是什么颜色的屋顶（没有坡屋顶的不算）
+const sideRoofs = (w, h) => DIRS.map((d) => w.roofOf(w.cell(h.x + d.x, h.z + d.z))).filter((r) => r >= 0);
 
 // ---------- 条件库 ----------
 // 每个条件：test(世界, 住处) 是否满足；need 卡片上的提示；say 居民自己的说法。
@@ -261,6 +275,112 @@ const cond = {
     },
     get say() {
       return key ? t(`${key}.say`) : '';
+    },
+  }),
+  // ---- 颜色 ----
+  // 自己这间房的墙是第 k 种颜色
+  wallIs: (k) => ({
+    test: (w, h) => blockAt(w, h).c === k,
+    get need() {
+      return t('c.wallIs.need', k);
+    },
+    get say() {
+      return t('c.wallIs.say', k);
+    },
+  }),
+  // 这栋楼的屋顶是第 k 种颜色
+  roofIs: (k) => ({
+    test: (w, h) => w.roofOf(w.cell(h.x, h.z)) === k,
+    get need() {
+      return t('c.roofIs.need', k);
+    },
+    get say() {
+      return t('c.roofIs.say', k);
+    },
+  }),
+  // 同层有紧挨着的房间，而且墙色都和自己不一样
+  wallUnlike: () => ({
+    test: (w, h) => {
+      const mine = blockAt(w, h).c;
+      const side = sideRooms(w, h);
+      return side.length > 0 && side.every((b) => b.c !== mine);
+    },
+    get need() {
+      return t('c.wallUnlike.need');
+    },
+    get say() {
+      return t('c.wallUnlike.say');
+    },
+  }),
+  // 和同层紧挨着的某一间刷成了同一种颜色，而且不是没刷过的白墙
+  wallPair: () => ({
+    test: (w, h) => {
+      const mine = blockAt(w, h).c;
+      return mine !== WALL_DEFAULT && sideRooms(w, h).some((b) => b.c === mine);
+    },
+    get need() {
+      return t('c.wallPair.need');
+    },
+    get say() {
+      return t('c.wallPair.say');
+    },
+  }),
+  // 紧挨着有别的坡屋顶，而且颜色都和自己这栋不一样
+  roofUnlike: () => ({
+    test: (w, h) => {
+      const mine = w.roofOf(w.cell(h.x, h.z));
+      const side = sideRoofs(w, h);
+      return mine >= 0 && side.length > 0 && side.every((r) => r !== mine);
+    },
+    get need() {
+      return t('c.roofUnlike.need');
+    },
+    get say() {
+      return t('c.roofUnlike.say');
+    },
+  }),
+  // 全岛只有自己这一栋是这种颜色的屋顶（只当隐藏心愿用）
+  roofUnique: () => ({
+    test: (w, h) => {
+      const home = w.cell(h.x, h.z);
+      const mine = w.roofOf(home);
+      return mine >= 0 && !w.cells.some((c) => c !== home && w.roofOf(c) === mine);
+    },
+    need: '',
+    say: '',
+  }),
+  // 屋顶和隔壁连成一片，而且不是没刷过的红顶（只当隐藏心愿用）
+  roofRow: () => ({
+    test: (w, h) => w.roofOf(w.cell(h.x, h.z)) !== ROOF_DEFAULT && [0, 1, 2, 3].some((d) => w.roofJoin(h.x, h.z, d)),
+    need: '',
+    say: '',
+  }),
+  // r 格以内有别的楼是第 k 种颜色的屋顶
+  roofNear: (k, r) => ({
+    test: (w, h) => countNear(w, h.x, h.z, r, (c, dx, dz) => (dx || dz) && w.roofOf(c) === k) > 0,
+    get need() {
+      return t('c.roofNear.need', k, r);
+    },
+    get say() {
+      return t('c.roofNear.say', k);
+    },
+  }),
+  // r 格以内（连自己这栋）有 n 种颜色的屋顶
+  roofKinds: (n, r) => ({
+    test: (w, h) => {
+      const seen = new Set();
+      countNear(w, h.x, h.z, r, (c) => {
+        const k = w.roofOf(c);
+        if (k >= 0) seen.add(k);
+        return false;
+      });
+      return seen.size >= n;
+    },
+    get need() {
+      return t('c.roofKinds.need', n, r);
+    },
+    get say() {
+      return t('c.roofKinds.say');
     },
   }),
   fields: (n) => ({
@@ -599,6 +719,70 @@ export const ARCHETYPES = {
     dream: cond.dock(2),
     recipe: (x, z) => [[['room', x, z]], ...around(x, z, (lx, lz) => [['room', x, z], ['lighthouse', lx, lz]])],
   },
+  // ---- 在意颜色的居民（hue：自己对颜色有主意，不会再冒出"想换个墙色"的新想法）。
+  // 颜色都不放在必须条件里：颜色不合意也住得下，只是到不了更高的评价 ----
+  cai: {
+    look: { body: '#f2a65a', hair: '#4a3a2c', hat: 'beret' },
+    home: 'room',
+    hue: true,
+    needs: ['paint'],
+    must: [cond.joined()],
+    want: [cond.wallUnlike()],
+    dream: cond.roofUnique(),
+    recipe: (x, z) => [[['room', x, z]], ...around(x, z, (nx, nz) => [['room', x, z], ['room', nx, nz]])],
+  },
+  qi: {
+    look: { body: '#9fb8d8', hair: '#3b2f2a', style: 'short' },
+    home: 'ground',
+    hue: true,
+    needs: ['paint'],
+    must: [cond.road()],
+    want: [cond.wallPair()],
+    dream: cond.roofRow(),
+    recipe: (x, z) => [[['room', x, z]], ...around(x, z, (rx, rz) => [['room', x, z], ['road', rx, rz]])],
+  },
+  hong: {
+    look: { body: '#e86f8a', hair: '#f0cf78', style: 'bun' },
+    home: 'balcony',
+    hue: true,
+    perchAt: [0.3, 0.5],
+    needs: ['paint'],
+    must: [cond.facing(0)],
+    want: [cond.roofKinds(3, 2)],
+    dream: cond.wallIs(2),
+    recipe: balconyRecipe(0),
+  },
+  lan: {
+    look: { body: '#4f86c6', hair: '#e8e2d6', hat: 'cap' },
+    home: 'ground',
+    hue: true,
+    needs: ['paint'],
+    must: [cond.water(2, 's.lan.water')],
+    want: [cond.roofNear(4, 2)],
+    dream: cond.roofIs(0),
+    recipe: (x, z) => [[['room', x, z]]],
+  },
+  mei: {
+    look: { body: '#d98a9a', hair: '#ece8de', style: 'bun' },
+    home: 'room',
+    calm: true,
+    hue: true,
+    needs: ['paint'],
+    must: [cond.quiet(2)],
+    want: [cond.trees(1, 2)],
+    dream: cond.wallIs(1),
+    recipe: (x, z) => [[['room', x, z]]],
+  },
+  zi: {
+    look: { body: '#9a7fc8', hair: '#3b3350', style: 'short' },
+    home: 'room',
+    hue: true,
+    needs: ['paint'],
+    must: [cond.topFloor()],
+    want: [cond.roofUnlike()],
+    dream: cond.roofIs(5),
+    recipe: (x, z) => [[['room', x, z]]],
+  },
 };
 for (const [id, a] of Object.entries(ARCHETYPES)) {
   a.id = id;
@@ -614,7 +798,7 @@ export function eligibleIds(unlocked, present) {
 }
 
 // ---------- 新想法 ----------
-// bonus：{ k: 'near', type, r } | { k: 'friend', id } | { k: 'avoid', id }
+// bonus：{ k: 'near', type, r } | { k: 'friend', id } | { k: 'avoid', id } | { k: 'wall', c }（想把自己家的墙刷成第 c 种颜色）
 
 const FRIEND_R = 3; // 想住得近：两家相隔不超过几格
 const AVOID_R = 4; // 想住得远：两家至少隔开几格
@@ -646,6 +830,7 @@ function clash(a, b) {
 export function bonusConflicts(roster, r) {
   const b = r.bonus;
   if (!b) return false;
+  if (b.k === 'wall') return !PAINTS.includes(b.c) || !!r.spec.hue;
   if (b.k === 'near') {
     const o = NEAR_POOL.find((n) => n.type === b.type);
     return !o || (o.noisy && !!r.spec.calm) || (o.tall && !!(r.spec.sun || r.spec.peak));
@@ -657,12 +842,17 @@ export function bonusConflicts(roster, r) {
 
 function bonusMet(w, b, h, homes) {
   if (b.k === 'near') return countNear(w, h.x, h.z, b.r, has(b.type)) > 0;
+  if (b.k === 'wall') {
+    const blk = blockAt(w, h);
+    return !!blk && blk.t === 'room' && blk.c === b.c;
+  }
   const other = homes.get(b.id);
   if (b.k === 'friend') return !!other && cheb(h, other) <= FRIEND_R;
   return !other || cheb(h, other) >= AVOID_R;
 }
 
 function bonusInfo(b) {
+  if (b.k === 'wall') return { text: t('bonus.wall.text', b.c), say: t('bonus.wall.say', b.c), doneSay: t('bonus.wall.done', b.c) };
   if (b.k === 'near') {
     return { text: t('bonus.near.text', b.type, b.r), say: t('bonus.near.say', b.type), doneSay: t('bonus.near.done', b.type) };
   }
@@ -698,14 +888,20 @@ export function makeBonus(w, roster, results, i, unlocked) {
     .slice(0, 3);
   const avoid = me.calm ? others.filter((o) => o.spec.loud && o.d < AVOID_R - 1) : [];
 
+  // 想给自己家的墙换个颜色：粉刷解锁以后才会有，对颜色另有主意的居民不会想这个
+  const mine = blockAt(w, home);
+  const canPaint = unlocked.has('paint') && !me.hue && !!mine && mine.t === 'room';
+  const repaint = () => ({ k: 'wall', c: pickOne(PAINTS.filter((c) => c !== mine.c && c !== WALL_DEFAULT)) });
+
   const roll = Math.random();
+  if (canPaint && roll > 0.8) return repaint();
   if (avoid.length && roll < 0.15) return { k: 'avoid', id: pickOne(avoid).spec.id };
   if (friends.length && (roll < 0.38 || !near.length)) return { k: 'friend', id: pickOne(friends).spec.id };
   if (near.length) {
     const o = pickOne(near);
     return { k: 'near', type: o.type, r: o.r };
   }
-  return null;
+  return canPaint ? repaint() : null;
 }
 
 // ---------- 评估 ----------

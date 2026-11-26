@@ -3,7 +3,7 @@ import { MODULES, TABS, VERSION, AUTHOR } from './config.js';
 import { LEVELS, unlockLevel } from './progression.js';
 import { FPS_CHOICES } from './perf.js';
 import { TRACKS } from './music.js';
-import { t, nameOf, LANGS, getLang } from './i18n.js';
+import { t, nameOf, descOf, LANGS, getLang } from './i18n.js';
 import { feedbackOn, cooling, KINDS, MAX_LEN, MIN_LEN } from './feedback.js';
 
 const svg = (inner) => `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
@@ -182,7 +182,7 @@ export class UI {
         `<span class="need">${ICON.lock}<em>${LEVELS[unlockLevel(m.id)].need}</em></span>`;
       b.addEventListener('click', () => this.h.selectTool(m.id));
       const name = () => nameOf(m.id);
-      this.bindTip(b, name, () => (this.unlocked.has(m.id) ? t(`desc.${m.id}`) : t('tool.locked', LEVELS[unlockLevel(m.id)].need)));
+      this.bindTip(b, name, () => (this.unlocked.has(m.id) ? descOf(m.id) : t('tool.locked', LEVELS[unlockLevel(m.id)].need)));
       bar.appendChild(b);
       this.toolEls.set(m.id, b);
       this.toolNames.set(m.id, name);

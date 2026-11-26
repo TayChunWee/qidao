@@ -172,6 +172,18 @@ beamGeo.setAttribute(
 );
 
 // 三角柱屋顶：axis 方向为屋脊，a0..a1 为屋脊两端的位置
+// 墙的颜色。0 号是原来那几种深浅不一的米白；别的颜色也按位置略微变一点深浅，免得一排房子像一块色板
+function wallColor(c, tone = 0) {
+  if (!c) return C.walls[tone % C.walls.length];
+  return `#${_c.set(C.wallPaint[c]).offsetHSL(0, 0, ((tone % 5) - 2) * 0.008).getHexString()}`;
+}
+
+// 屋顶的颜色：楼越高越深一点。1 号（红）沿用原来按层数排的三种红
+function roofColor(c, lv) {
+  if (c === 1) return C.roofs[Math.min(lv, 3) - 1];
+  return `#${_c.set(C.roofPaint[c]).offsetHSL(0, 0, -0.02 * (Math.min(lv, 5) - 1)).getHexString()}`;
+}
+
 function prism(g, axis, a0, a1, roofCol, capCol) {
   const hw = 0.47;
   const rh = 0.36;
@@ -201,7 +213,7 @@ export function buildPart(kind, p = {}) {
 
   switch (kind) {
     case 'room': {
-      g.box(BODY, H, BODY, 0, 0, 0, C.walls[p.tone % C.walls.length]);
+      g.box(BODY, H, BODY, 0, 0, 0, wallColor(p.c, p.tone));
       g.box(BODY + 0.04, 0.05, BODY + 0.04, 0, 0, 0, C.trim);
       break;
     }
@@ -280,8 +292,8 @@ export function buildPart(kind, p = {}) {
     }
 
     case 'roof': {
-      const col = C.roofs[Math.min(p.lv, C.roofs.length) - 1];
-      const cap = C.walls[p.tone % C.walls.length];
+      const col = roofColor(p.c ?? 1, p.lv);
+      const cap = wallColor(p.wc, p.tone);
       if (!p.e && !p.w && !p.n && !p.s) {
         g.box(0.93, 0.04, 0.93, 0, 0, 0, C.trim);
         g.cone(0.68, 0.4, 4, 0, 0.04, 0, col, Math.PI / 4);
