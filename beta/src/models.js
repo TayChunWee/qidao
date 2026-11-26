@@ -441,7 +441,7 @@ export function buildPart(kind, p = {}) {
       if (p.seed % 2 === 0) {
         g.cyl(0.045, 0.06, 0.28, 6, 0, 0, 0, C.trunk);
         g.ball(0.27, 0, 0.47, 0, C.leafA, 1);
-        g.ball(0.19, 0.14, 0.63, 0.05, C.leafC, 1);
+        g.ball(0.19, 0.14, 0.63, 0.05, C.treeTop, 1);
         g.ball(0.17, -0.13, 0.58, -0.09, C.leafB, 1);
       } else {
         g.cyl(0.04, 0.055, 0.22, 6, 0, 0, 0, C.trunk);
@@ -781,6 +781,10 @@ export function buildZoneLand(world, zone) {
 
 // 升起动画用：每格一个网格（两种草色各共用一份几何体）
 let cellGeos = null;
+// 换季时草的颜色变了：共用的那两份几何体下次用到时重新做
+export function resetLandCache() {
+  cellGeos = null;
+}
 export function buildZoneCells(world, zone) {
   if (!cellGeos) {
     cellGeos = [0, 1].map((k) => {

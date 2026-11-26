@@ -6,8 +6,9 @@ export const H = 0.62; // 每层高度
 export const BODY = 0.84; // 房间主体宽度
 export const HALF = BODY / 2;
 export const DAY_LENGTH = 600; // 一昼夜的秒数（十分钟）
+export const SEASON_DAYS = 3; // 一个季节几天。季节：0 春 1 夏 2 秋 3 冬
 // 版本：每次发布到线上时改成当天的日期。显示在"制作与鸣谢"里，也随玩家的反馈一起寄出
-export const VERSION = '2026-11-26b';
+export const VERSION = '2026-11-26c';
 export const AUTHOR = 'ovob'; // 作者署名，显示在"制作与鸣谢"最上面
 
 // 方向：0 北(-z) 1 东(+x) 2 南(+z) 3 西(-x)
@@ -78,6 +79,7 @@ export const C = {
   leafA: '#84bd72',
   leafB: '#6fab66',
   leafC: '#97c980',
+  treeTop: '#97c980', // 阔叶树最顶上那一团：春天开花，秋天变黄
   pineA: '#62a070',
   pineB: '#71ad7b',
   trunk: '#9c7150',
@@ -110,6 +112,22 @@ export const C = {
   smoke: '#f6f3ec',
   spark: '#ffe08a',
 };
+
+// 每个季节要换掉的颜色，没写的沿用 C 里原本的。夏天就是 C 原本的样子。
+// 冬天只是把草和树叶换成挂霜的浅色，屋顶上不积雪
+export const SEASON_COLORS = [
+  { grassA: '#c0de92', grassB: '#b4d688', leafA: '#9ad086', leafB: '#86c47a', treeTop: '#f5bccb', gardenBed: '#a2d088', crop: '#a6d47c' },
+  {},
+  { grassA: '#d0cf8a', grassB: '#c6c580', leafA: '#e3a04c', leafB: '#d0703e', leafC: '#c9c070', treeTop: '#eec65c', pineA: '#5c9468', pineB: '#6aa173', gardenBed: '#aebf7a', crop: '#c2b862' },
+  { grassA: '#e4ece0', grassB: '#dae4d6', leafA: '#e2ebe6', leafB: '#d0ded8', leafC: '#cfdcc8', treeTop: '#f3f7f5', pineA: '#7ba58e', pineB: '#9bbfaa', gardenBed: '#cbd8c4', crop: '#b9c6aa' },
+];
+// 各个季节的光：阳光和天光各乘上这个颜色，最后一个数是亮度的倍数。秋天偏金，冬天偏冷、暗一点
+export const SEASON_LIGHT = [
+  [1, 1, 0.98, 1],
+  [1.02, 1, 0.96, 1.04],
+  [1.05, 0.96, 0.86, 0.98],
+  [0.93, 0.97, 1.06, 0.93],
+];
 
 // 粉刷的颜色编号：0 白 1 红 2 黄 3 绿 4 蓝 5 紫。新盖的房间是白墙、红顶
 export const PAINTS = [0, 1, 2, 3, 4, 5];

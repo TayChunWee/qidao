@@ -1,10 +1,19 @@
 // 3D 场景：镜头、灯光与昼夜、零件的增删动画、摆放虚影、粒子、拾取。
 import * as THREE from './vendor/three.module.min.js';
-import { SIZE, H, C, DIRS, DIR_RY, opp } from './config.js';
-import { buildPart, buildTerrain, buildZoneLand, buildZoneCells, buildZoneSand, mats } from './models.js';
+import { SIZE, H, C, DIRS, DIR_RY, opp, SEASON_COLORS, SEASON_LIGHT } from './config.js';
+import { buildPart, buildTerrain, buildZoneLand, buildZoneCells, buildZoneSand, resetLandCache, mats } from './models.js';
 import { MAX_STAGE, START_CENTER } from './world.js';
 import { describeCell, ghostParts } from './viewmodel.js';
 import { Anim, ease } from './anim.js';
+import { Weather } from './weather.js';
+
+// 跟着季节变色的东西：换季时这些零件要重画，别的不用动
+const SEASONAL = new Set(['tree', 'garden', 'field']);
+const SEASON_KEYS = [...new Set(SEASON_COLORS.flatMap((s) => Object.keys(s)))];
+const SUMMER = Object.fromEntries(SEASON_KEYS.map((k) => [k, C[k]])); // C 里原本的颜色
+const OVERCAST = new THREE.Color('#b9c2cc'); // 下雨下雪时天色往这个灰里靠
+const _a = new THREE.Color();
+const _b = new THREE.Color();
 
 const ELEV = THREE.MathUtils.degToRad(34);
 const CAM_DIST = 60;
@@ -159,6 +168,14 @@ export class View {
 
     this.anim = new Anim();
     this.particles = new Particles(this.scene);
+    this.weather = new Weather(this.scene);
+    this.fx = 1; // 画质允许天气的粒子画几成，由 perf.js 调
+    this.wet = 0; // 天有多阴（0-1），下雨下雪时慢慢变阴
+    this.wetGoal = 0;
+    this.seasonStamp = '';
+    this.seasonTint = new THREE.Color(1, 1, 1);
+    this.seasonBright = 1;
+    this.markerBase = 0.26;
     this.time = 0;
     this.night = 0;
     this.sunTheta = 0;
@@ -274,6 +291,7 @@ export class View {
   // ---------- 地形 ----------
 
   setWorld(world) {
+    this.world = world;
     if (this.terrain) {
       // 重新开始：把陆地和沙洲换成新世界的样子
       for (const m of [...this.zoneLand, ...this.zoneSand]) {
@@ -524,6 +542,13 @@ export class View {
     this.hemi.groundColor.lerpColors(a.gnd, b.gnd, k);
     this.hemi.intensity = lerp(a.hi, b.hi, k);
     this.scene.background.lerpColors(a.sea, b.sea, k);
+    // 季节给光染一点颜色；下雨下雪时阳光弱下去，天和海都灰一些
+    const w = this.wet;
+    this.sun.color.multiply(this.seasonTint);
+    this.hemi.color.multiply(this.seasonTint).lerp(OVERCAST, w * 0.4);
+    this.sun.intensity *= this.seasonBright * (1 - w * 0.62);
+    this.hemi.intensity *= this.seasonBright * (1 - w * 0.08);
+    this.scene.background.lerp(_a.copy(OVERCAST).multiplyScalar(0.25 + this.sun.intensity * 0.2), w * 0.35);
     if (this.terrain) this.terrain.seaMat.color.copy(this.scene.background);
 
     // 太阳从东(+x)到西(-x)，略偏南；夜里换成月亮
@@ -548,6 +573,45 @@ export class View {
     mats.forge.emissiveIntensity = 0.9 + Math.sin(this.time * 9) * 0.12 + Math.sin(this.time * 23) * 0.06;
   }
 
+  // ---------- 季节与天气 ----------
+
+  // 颜色从季节 from 变到季节 to，k 是变到哪一步了（0-1）。只改颜色表和陆地；
+  // 岛上的树、花园、菜地由随后的 sync 重画（它们的记号里带着 seasonStamp）
+  setSeason(from, to, k) {
+    for (const key of SEASON_KEYS) {
+      _a.set(SEASON_COLORS[from][key] || SUMMER[key]);
+      _b.set(SEASON_COLORS[to][key] || SUMMER[key]);
+      C[key] = `#${_a.lerp(_b, k).getHexString()}`;
+    }
+    const la = SEASON_LIGHT[from];
+    const lb = SEASON_LIGHT[to];
+    this.seasonTint.setRGB(lerp(la[0], lb[0], k), lerp(la[1], lb[1], k), lerp(la[2], lb[2], k));
+    this.seasonBright = lerp(la[3], lb[3], k);
+    this.seasonStamp = `${from}${to}${k}`;
+    resetLandCache();
+    if (!this.terrain) return;
+    // 已经长出来的陆地、还没长出来的沙洲，按新颜色重做。正在升起的那一片升完时自己会按新颜色合并
+    const swap = (list, build) => {
+      list.forEach((m, zone) => {
+        if (!m) return;
+        const y = m.position.y;
+        this.scene.remove(m);
+        m.geometry.dispose();
+        list[zone] = build(this.world, zone);
+        list[zone].position.y = y;
+        this.scene.add(list[zone]);
+      });
+    };
+    swap(this.zoneLand, buildZoneLand);
+    swap(this.zoneSand, buildZoneSand);
+  }
+
+  // rain：下不下雨；drift：天上飘什么（'snow' 雪、'leaf' 落叶、'petal' 花瓣、null）；overcast：天阴不阴
+  setWeather(rain, drift, overcast) {
+    this.weather.set(rain, drift);
+    this.wetGoal = overcast ? 1 : 0;
+  }
+
   // ---------- 零件同步 ----------
 
   // mode：'place' 玩家刚摆放或拆除；'bulk' 撤销、重做、重置；'init' 首次载入；'instant' 整块移动后直接换好
@@ -566,7 +630,7 @@ export class View {
         for (const d of descs) {
           seen.add(d.key);
           const y = d.y || 0;
-          const sig = d.kind + JSON.stringify(d.p);
+          const sig = d.kind + JSON.stringify(d.p) + (SEASONAL.has(d.kind) ? this.seasonStamp : '');
           const cur = map.get(d.key);
           if (cur && cur.sig === sig) {
             if (Math.abs(cur.y - y) > 1e-4) {
@@ -578,6 +642,7 @@ export class View {
           }
           const obj = buildPart(d.kind, d.p);
           obj.position.y = y;
+          obj.userData.phase = (x * 2.399 + z * 3.883) % 6.28; // 摇摆的节拍按位置定：换季重画时树不会突然抖一下
           group.add(obj);
           const rec = { obj, sig, y, kind: d.kind };
           map.set(d.key, rec);
@@ -991,7 +1056,7 @@ export class View {
       // 拆除是红框；粉刷时框是要刷上去的那种颜色
       const tint = h.kind === 'paint';
       this.marker.material.color.set(tint ? (h.brush === 'wall' ? C.wallPaint : C.roofPaint)[h.color] : '#ff7a66');
-      this.marker.material.opacity = tint ? 0.62 : 0.32;
+      this.markerBase = tint ? 0.58 : 0.26;
       if (tint) {
         if (h.brush === 'roof') {
           this.marker.position.set(cx, (h.level + 1) * H + 0.24, cz);
@@ -1050,6 +1115,11 @@ export class View {
     this.updateCamera(1 - Math.exp(-dt * 9));
     this.anim.update(dt);
     this.particles.update(dt);
+    // 天气：阴晴慢慢变；雨雪只落在镜头看得到的那一片
+    this.wet += Math.sign(this.wetGoal - this.wet) * Math.min(Math.abs(this.wetGoal - this.wet), dt / 8);
+    const span = this.viewH / this.zoom;
+    const reach = Math.min(30, Math.max(span / 2 / Math.sin(ELEV), (span * this.w) / this.h / 2) + 3);
+    this.weather.update(dt, this.target.x, this.target.z, reach, this.renderer.domElement.height / span, this.fx, this.night);
 
     for (const o of this.swayers) {
       const ph = o.userData.phase;
@@ -1098,7 +1168,7 @@ export class View {
       this.hl.position.lerp(this.hlPos, k);
       this.hl.scale.setScalar(0.96 + Math.sin(this.time * 5) * 0.03);
     }
-    if (this.marker.visible) this.marker.material.opacity = 0.26 + Math.sin(this.time * 6) * 0.08;
+    if (this.marker.visible) this.marker.material.opacity = this.markerBase + Math.sin(this.time * 6) * 0.08;
     if (this.selGroup.visible) {
       const sk = 1 - Math.exp(-dt * 22);
       this.selOff.lerp(this.selGoal, sk);

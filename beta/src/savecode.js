@@ -105,7 +105,7 @@ export function encodeSave(save) {
     }
   }
   flush();
-  const json = JSON.stringify({ v: save.v, w: cells, l: save.level, t: Math.round(save.t * 1000) / 1000, r: save.roster, d: save.done ? 1 : 0 });
+  const json = JSON.stringify({ v: save.v, w: cells, l: save.level, t: Math.round(save.t * 1000) / 1000, y: save.day || 0, r: save.roster, d: save.done ? 1 : 0 });
   const ascii = json.replace(/[\u0080-￿]/g, (ch) => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0'));
   const body = compress(ascii);
   return HEAD + body + checksum(body);
@@ -132,5 +132,5 @@ export function decodeSave(text) {
     } else cells.push(c);
     if (cells.length > MAX_CELLS) bad();
   }
-  return { v: data.v, world: JSON.stringify(cells), level: data.l, t: data.t, roster: data.r, done: !!data.d };
+  return { v: data.v, world: JSON.stringify(cells), level: data.l, t: data.t, day: data.y, roster: data.r, done: !!data.d };
 }

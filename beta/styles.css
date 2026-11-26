@@ -228,6 +228,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .clock { display: flex; align-items: center; gap: 8px; padding: 0 16px 0 12px; height: 46px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .clock-icon { width: 22px; height: 22px; color: var(--gold); display: grid; }
 .clock-icon.moon { color: #8f9ad0; }
+.clock-season { margin-right: -2px; font-weight: 800; color: var(--accent-deep); }
+/* 画质选"低"的时候，界面的毛玻璃效果也关掉：它在弱一些的显卡上很费 */
+body.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.s-row.test-only[hidden] { display: none; }
+/* 只在测试版出现的开关：名字单独一行，按钮在下面占满，英文的四个季节名才排得下 */
+.s-row.test-only { flex-wrap: wrap; row-gap: 4px; }
+.s-row.test-only > span:nth-child(2) { flex: 1; width: auto; }
+.s-row.test-only .seg { flex: 0 0 100%; }
 
 /* 指南针：表盘跟着镜头转，红针指北；太阳（夜里是月亮）骑在外圈上，东升西落 */
 .compass { position: relative; z-index: 1; width: 56px; height: 56px; border-radius: 50%; padding: 0; display: grid; place-items: center; }
