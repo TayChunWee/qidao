@@ -431,7 +431,7 @@ export class UI {
     document.addEventListener(
       'touchmove',
       (e) => {
-        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits')) e.preventDefault();
+        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits, #backup')) e.preventDefault();
       },
       { passive: false },
     );
@@ -490,6 +490,7 @@ export class UI {
     $('#scrim').addEventListener('click', () => {
       $('#feedback').hidden = true;
       $('#credits').hidden = true;
+      $('#backup').hidden = true;
       this.setFeedbackMsg('');
     });
     $('#btn-next').innerHTML = ICON.next;
@@ -546,6 +547,7 @@ export class UI {
     });
     this.buildFeedback(panel);
     this.buildCredits(panel);
+    this.buildBackup(panel);
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
     this.dial = $('#dial');
@@ -948,6 +950,101 @@ export class UI {
     const [k, isBad] = this.fbMsgKey || ['', false];
     this.fbMsg.textContent = k ? t(k) : '';
     this.fbMsg.classList.toggle('bad', isBad);
+  }
+
+  // ---------- 存档备份 ----------
+
+  // 导出：把小岛写成一段文字让玩家自己收好；导入：贴回这段文字，先看一眼里面是什么，再按一次才真的换掉
+  buildBackup(settingsPanel) {
+    const box = $('#backup');
+    const text = $('#bk-text');
+    const go = $('#bk-go');
+    const modes = $('#bk-mode');
+    const msg = $('#bk-msg');
+    let mode = 'out';
+    let ready = null; // 已经检查通过、等玩家再按一次确认的那段文字
+    const say = (s, bad = false) => {
+      msg.textContent = s;
+      msg.classList.toggle('bad', bad);
+    };
+    const setMode = (m) => {
+      mode = m;
+      ready = null;
+      for (const b of modes.children) b.classList.toggle('on', b.dataset.mode === m);
+      text.readOnly = m === 'out';
+      text.value = m === 'out' ? this.h.exportSave() : '';
+      text.placeholder = m === 'in' ? t('bk.paste') : '';
+      text.scrollTop = 0;
+      $('#bk-note').textContent = t(m === 'out' ? 'bk.outNote' : 'bk.inNote');
+      go.textContent = t(m === 'out' ? 'bk.copy' : 'bk.load');
+      say('');
+    };
+    const close = () => (box.hidden = true);
+    const selectAll = () => {
+      text.focus();
+      text.setSelectionRange(0, text.value.length);
+    };
+    const copy = async () => {
+      let ok = false;
+      try {
+        await navigator.clipboard.writeText(text.value);
+        ok = true;
+      } catch (e) {
+        // 有些内置浏览器不给用剪贴板接口：退回老办法，选中后让浏览器复制
+        try {
+          selectAll();
+          ok = document.execCommand('copy');
+        } catch (e2) {
+          /* 两种都不行，就请玩家自己长按复制 */
+        }
+      }
+      if (!ok) selectAll();
+      say(t(ok ? 'bk.copied' : 'bk.copyFail'), !ok);
+    };
+    $('#btn-backup').addEventListener('click', () => {
+      this.h.clickSound();
+      settingsPanel.hidden = true;
+      $('#feedback').hidden = true;
+      $('#credits').hidden = true;
+      setMode('out');
+      box.hidden = false;
+    });
+    modes.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.dataset.mode === mode) return;
+      this.h.clickSound();
+      setMode(b.dataset.mode);
+      if (mode === 'in') text.focus();
+    });
+    // 导出时点一下文字就整段选中，手动复制也方便
+    text.addEventListener('click', () => {
+      if (mode === 'out') selectAll();
+    });
+    text.addEventListener('input', () => {
+      if (mode !== 'in') return;
+      ready = null;
+      go.textContent = t('bk.load');
+      say('');
+    });
+    go.addEventListener('click', () => {
+      this.h.clickSound();
+      if (mode === 'out') return copy();
+      const code = text.value;
+      if (!code.trim()) return say(t('bk.empty'), true);
+      if (ready === code) {
+        if (!this.h.applyImport(code)) say(t('bk.fail'), true);
+        return;
+      }
+      const res = this.h.checkImport(code);
+      if (!res.ok) return say(t(res.why), true);
+      ready = code;
+      say(t('bk.found', res.level, res.people));
+      go.textContent = t('bk.replace');
+    });
+    $('#bk-close').addEventListener('click', close);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
   }
 
   // ---------- 制作与鸣谢 ----------

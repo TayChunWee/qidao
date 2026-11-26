@@ -1,8 +1,8 @@
 // 把逻辑、画面、声音和界面接在一起：工具、输入、撤销、存档、居民到来、愿望变化、小岛升级。
 import { FPS_CHOICES } from './perf.js';
-import { World, SOLIDS, SOLO, START_CENTER } from './world.js';
+import { World, SOLIDS, SOLO, GROUNDS, START_CENTER } from './world.js';
 import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS } from './wishes.js';
-import { MODULES, TABS, H, DAY_LENGTH, SIZE, VERSION } from './config.js';
+import { MODULES, TABS, H, DAY_LENGTH, SIZE, MAX_LEVEL, VERSION } from './config.js';
 import { t, nameOf, descOf, getLang, setLang } from './i18n.js';
 import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf } from './progression.js';
 import { thumbParts } from './viewmodel.js';
@@ -10,8 +10,48 @@ import { Resident, arrivalCell, walkable } from './residents.js';
 import { UI } from './ui.js';
 import { TRACKS } from './music.js';
 import { sendFeedback } from './feedback.js';
+import { encodeSave, decodeSave } from './savecode.js';
 
 const SAVE_KEY = 'qidao-save-v2';
+const SAVE_V = 3;
+
+// 玩家贴进来的存档可能是别人给的，也可能被改过：不照单全收，只把认识的内容一样样重新抄一遍，
+// 有一处看不懂就整份不要。返回的是可以直接存进浏览器的存档
+const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+function cleanSave(raw) {
+  const bad = () => {
+    throw new Error('bad');
+  };
+  if (raw.v > SAVE_V) throw new Error('newer');
+  const cells = JSON.parse(raw.world);
+  if (cells.length !== SIZE * SIZE || !Array.isArray(raw.roster)) bad();
+  if (!Number.isInteger(raw.level) || raw.level < 0 || raw.level > MAX_LV) bad();
+  const world = cells.map((c) => {
+    if (c === 0) return 0;
+    if (!Array.isArray(c) || !Array.isArray(c[1]) || c[1].length > MAX_LEVEL) bad();
+    if (c[0] !== 0 && !GROUNDS.includes(c[0])) bad();
+    const s = c[1].map((b) => {
+      if (!Array.isArray(b) || !SOLIDS.includes(b[0]) || ![0, 1, 2, 3].includes(b[1]) || !/^[01]{4}$/.test(b[2])) bad();
+      return [b[0], b[1], b[2]];
+    });
+    if (s.length > 1 && s.some((b) => own(SOLO, b[0]))) bad();
+    return c[0] || s.length ? [c[0], s] : 0;
+  });
+  const seen = new Set();
+  const roster = [];
+  for (const r of raw.roster) {
+    if (!r || !own(ARCHETYPES, r.id) || seen.has(r.id)) continue;
+    seen.add(r.id);
+    const b = r.bonus;
+    let bonus = null;
+    if (b && (b.k === 'friend' || b.k === 'avoid') && own(ARCHETYPES, b.id)) bonus = { k: b.k, id: b.id };
+    else if (b && b.k === 'near' && own(MODULES, b.type) && Number.isInteger(b.r) && b.r > 0 && b.r < 9) bonus = { k: 'near', type: b.type, r: b.r };
+    roster.push({ id: r.id, bonus, happy: Number.isFinite(r.happy) && r.happy > 0 ? Math.min(r.happy, 1e6) : 0 });
+  }
+  const save = { v: SAVE_V, world: JSON.stringify(world), level: raw.level, t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0, roster, done: !!raw.done };
+  new World(stageFor(save.level)).load(save.world); // 真的摆一遍，摆不出来的也不要
+  return save;
+}
 const TAP_SLOP = 10; // 触屏上手指挪动不超过这么多像素，还算"点了一下"
 const SETTINGS_KEY = 'qidao-settings-v1';
 const MOD = Object.fromEntries(MODULES.map((m) => [m.id, m]));
@@ -151,6 +191,9 @@ export class Game {
       aimConfirm: () => (this.tool === 'move' ? this.confirmMove() : this.confirmAim()),
       aimCancel: () => this.cancelAim(),
       sendFeedback: (data) => sendFeedback({ ...data, info: this.feedbackInfo() }),
+      exportSave: () => encodeSave(this.snapshot()),
+      checkImport: (text) => this.checkImport(text),
+      applyImport: (text) => this.applyImport(text),
       focusResident: (id) => this.focusResident(id),
       hoverSound: () => this.audio.hover(),
       clickSound: () => this.audio.click(),
@@ -247,22 +290,54 @@ export class Game {
     }
   }
 
+  // 现在这座小岛写成存档的样子：存进浏览器和导出成文字用的是同一份
+  snapshot() {
+    return {
+      v: SAVE_V,
+      world: this.world.serialize(),
+      level: this.level,
+      t: this.t,
+      roster: this.roster.map((r) => ({ id: r.spec.id, bonus: r.bonus, happy: r.happy })),
+      done: this.done,
+    };
+  }
+
   save() {
     try {
-      localStorage.setItem(
-        SAVE_KEY,
-        JSON.stringify({
-          v: 3,
-          world: this.world.serialize(),
-          level: this.level,
-          t: this.t,
-          roster: this.roster.map((r) => ({ id: r.spec.id, bonus: r.bonus, happy: r.happy })),
-          done: this.done,
-        }),
-      );
+      localStorage.setItem(SAVE_KEY, JSON.stringify(this.snapshot()));
     } catch (e) {
       /* 存不了也不影响游玩 */
     }
+  }
+
+  // 看一眼贴进来的存档：读得出来就说说里面是什么，读不出来说明原因。不改动任何东西
+  checkImport(text) {
+    try {
+      const save = cleanSave(decodeSave(text));
+      return { ok: true, level: save.level + 1, people: save.roster.length };
+    } catch (e) {
+      return { ok: false, why: e.message === 'newer' ? 'bk.newer' : 'bk.bad' };
+    }
+  }
+
+  // 用贴进来的存档换掉现在的小岛：写进浏览器后重开页面，和平时读档走同一条路。失败时返回 false
+  applyImport(text) {
+    let save;
+    try {
+      save = cleanSave(decodeSave(text));
+      localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    } catch (e) {
+      return false;
+    }
+    // 从这里起不再存档，免得关页面时把刚写进去的又盖掉
+    this.started = false;
+    clearTimeout(this.saveTimer);
+    // 带着存档来的是玩过的人，不用再看一遍新手说明
+    this.settings.tutorialDone = true;
+    this.settings.growthTipDone = true;
+    this.saveSettings();
+    location.reload();
+    return true;
   }
 
   queueSave() {
