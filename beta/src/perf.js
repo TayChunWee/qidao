@@ -19,8 +19,10 @@ const QUALITY = [
 // 玩家在设置里选的画质。'auto'：跟着帧率在上面几档之间自动调；其余三样固定在某一档不动
 export const QUALITY_MODES = ['auto', 'low', 'mid', 'high'];
 const FIXED = { high: 0, mid: 1, low: 3 };
-// 每一档下，雨雪落叶这些画几成
+// 每一档下，雨雪这些画几成
 const FX = [1, 0.8, 0.65, 0.4, 0.3];
+// 每一档下，季节的打扮画得多细：2 全都有；1 少一些（没有冰凌和涟漪，花草稀一半）；0 只换颜色、屋顶和树有雪
+const DETAIL = [2, 1, 1, 0, 0];
 
 function snapHz(hz) {
   for (const c of COMMON_HZ) if (Math.abs(hz - c) / c < 0.06) return c;
@@ -93,6 +95,7 @@ export class Pacer {
     const k = QUALITY[q];
     this.view.setQuality(k.scale, k.shadow, k.gap);
     this.view.fx = FX[q];
+    this.view.setDetail(DETAIL[q]);
     this.dirty = true; // 切换那一下会卡一帧，这一秒不算数
   }
 

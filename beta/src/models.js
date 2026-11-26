@@ -1,6 +1,6 @@
 // 用代码生成所有模型。每个零件合并成一个带顶点色的网格，窗户等发光部分单独一个网格。
 import * as THREE from './vendor/three.module.min.js';
-import { C, H, BODY, HALF, DIRS, DIR_RY, opp, SIZE, rand01 } from './config.js';
+import { C, H, BODY, HALF, DIRS, DIR_RY, opp, SIZE, rand01, hash } from './config.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -90,6 +90,31 @@ export class Geo {
     return this;
   }
 
+  // 平躺着的一片（落叶、水洼、冰面）：pts 是一圈 [x, z]，法线朝上
+  flat(pts, y, color) {
+    _c.set(color);
+    for (let i = 1; i < pts.length - 1; i++) {
+      for (const v of [pts[0], pts[i + 1], pts[i]]) {
+        this.pos.push(v[0], y, v[1]);
+        this.nor.push(0, 1, 0);
+        this.col.push(_c.r, _c.g, _c.b);
+      }
+    }
+    return this;
+  }
+
+  // 一根小尖锥（n 个侧面，没有底）：草叶、花茎、花、雪堆、冰凌都用它。h 为负就是朝下的
+  spike(x, y, z, r, h, color, n = 3, rot = 0) {
+    const top = [x, y + h, z];
+    const mid = [x, y + h * 0.3, z];
+    for (let i = 0; i < n; i++) {
+      const a0 = rot + (i / n) * 6.2832;
+      const a1 = rot + ((i + 1) / n) * 6.2832;
+      this.tri([x + Math.cos(a0) * r, y, z + Math.sin(a0) * r], [x + Math.cos(a1) * r, y, z + Math.sin(a1) * r], top, color, mid);
+    }
+    return this;
+  }
+
   build() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
@@ -150,6 +175,8 @@ export const mats = {
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
   }),
+  // 下雨时草地上的水洼：平时看不见，雨下一阵子才慢慢显出来
+  puddle: new THREE.MeshStandardMaterial({ color: '#86b4c6', roughness: 0.12, metalness: 0, transparent: true, opacity: 0, depthWrite: false }),
   ghost: new THREE.MeshStandardMaterial({
     vertexColors: true,
     flatShading: true,
@@ -170,6 +197,68 @@ beamGeo.setAttribute(
   'position',
   new THREE.Float32BufferAttribute([0, 0, 0.03, 3.2, 0, 0.5, 3.2, 0, -0.5, 0, 0, -0.03, -3.2, 0, -0.5, -3.2, 0, 0.5], 3),
 );
+
+// 现在岛上是什么光景，零件照着它画。由 view.js 在换季、换画质时改：
+// season 0 春 1 夏 2 秋 3 冬；snow 积雪有多厚（0 没有，1-3 越来越厚）；detail 画得多细（0 低 1 中 2 高）
+export const SCENE = { season: 1, snow: 0, detail: 2 };
+export const sceneStamp = () => `${SCENE.season}${SCENE.snow}${SCENE.detail}`;
+// 落在地上、屋顶上的东西的颜色：春天是花瓣，秋天是落叶
+const LITTER = [['#f7c6d2', '#fbe1e7', '#f3aebf'], null, ['#e3a04c', '#d0703e', '#eec65c', '#c9853c'], null];
+
+// 尖顶上的雪帽：原来的锥体半径 r、高 h、底面在 y，雪盖住最上面的一截
+function snowCap(g, r, h, seg, y, ry) {
+  const s = 0.26 + 0.11 * SCENE.snow;
+  g.cone(r * s + 0.035, h * s + 0.03, seg, 0, y + h * (1 - s), 0, C.snow, ry);
+}
+
+// 三角柱屋顶上的雪：从屋脊往下盖住一截，下沿参差不齐。靠檐口的那一圈留着，屋顶刷的是什么颜色照样看得出来
+function snowSlopes(g, axis, a0, a1, seed) {
+  const hw = 0.47;
+  const rh = 0.36;
+  const P = (a, y, b) => (axis === 'x' ? [a, y, b] : [b, y, a]);
+  const base = 0.2 + 0.15 * SCENE.snow;
+  const lift = 0.012 + 0.008 * SCENE.snow;
+  const c = P((a0 + a1) / 2, 0, 0);
+  for (let i = 0; i < 3; i++) {
+    const s0 = a0 + ((a1 - a0) * i) / 3;
+    const s1 = a0 + ((a1 - a0) * (i + 1)) / 3;
+    for (const side of [-1, 1]) {
+      const cover = base + (rand01(seed, i, side + 2, 41) - 0.5) * 0.16;
+      const zb = side * hw * cover;
+      const yb = rh * (1 - cover);
+      g.quad(P(s0, yb + lift, zb), P(s0, rh + lift, 0), P(s1, rh + lift, 0), P(s1, yb + lift, zb), C.snow, c);
+      g.quad(P(s0, yb, zb), P(s0, yb + lift, zb), P(s1, yb + lift, zb), P(s1, yb, zb), C.snowShade, c);
+    }
+    // 画得细的时候，檐口挂几根冰凌
+    if (SCENE.detail === 2 && SCENE.snow >= 2) {
+      for (const side of [-1, 1]) {
+        const a = s0 + (s1 - s0) * (0.25 + rand01(seed, i, side + 2, 43) * 0.5);
+        const [x, y, z] = P(a, 0.005, side * (hw - 0.012));
+        g.spike(x, y, z, 0.016, -(0.04 + rand01(seed, i, side + 2, 44) * 0.05), C.snow);
+      }
+    }
+  }
+}
+
+// 屋顶斜面上零星的几片落叶或花瓣
+function roofLitter(g, axis, a0, a1, seed, colors) {
+  const hw = 0.47;
+  const rh = 0.36;
+  const P = (a, y, b) => (axis === 'x' ? [a, y, b] : [b, y, a]);
+  const c = P((a0 + a1) / 2, -1, 0);
+  const sl = Math.hypot(rh, hw);
+  for (let i = 0; i < 4; i++) {
+    const side = i % 2 ? 1 : -1;
+    const a = a0 + (a1 - a0) * (0.12 + rand01(seed, i, 51) * 0.76);
+    const k = 0.25 + rand01(seed, i, 52) * 0.6; // 离屋脊多远
+    const y = rh * (1 - k) + 0.008;
+    const z = side * hw * k;
+    const r = 0.028 + rand01(seed, i, 53) * 0.014;
+    const dy = (-rh / sl) * r * 0.6;
+    const dz = ((side * hw) / sl) * r * 0.6;
+    g.quad(P(a - r, y, z), P(a, y - dy, z - dz), P(a + r, y, z), P(a, y + dy, z + dz), colors[(seed + i) % colors.length], c);
+  }
+}
 
 // 三角柱屋顶：axis 方向为屋脊，a0..a1 为屋脊两端的位置
 // 墙的颜色。0 号是原来那几种深浅不一的米白；别的颜色也按位置略微变一点深浅，免得一排房子像一块色板
@@ -250,6 +339,7 @@ export function buildPart(kind, p = {}) {
       g.add(new THREE.BoxGeometry(0.38, 0.03, 0.17), C.roofs[0], 0, 0.47, z + 0.07, 0, 0.35);
       g.box(0.02, 0.06, 0.02, 0.2, 0.33, z + 0.02, C.metal);
       glow.box(0.05, 0.07, 0.05, 0.2, 0.27, z + 0.035, '#fff');
+      if (SCENE.snow && SCENE.detail) g.add(new THREE.BoxGeometry(0.34, 0.018, 0.12).translate(0, 0.024, -0.015), C.snow, 0, 0.47, z + 0.07, 0, 0.35);
       break;
     }
 
@@ -288,18 +378,33 @@ export function buildPart(kind, p = {}) {
         g.cyl(0.012, 0.012, 0.42, 6, 0.04, 0.05, z0 + 0.12, C.frame);
         g.cone(0.21, 0.08, 8, 0.04, 0.45, z0 + 0.12, C.flowers[1]);
       }
+      if (SCENE.snow && SCENE.detail) {
+        g.box(0.6, 0.016, 0.042, 0, 0.25, z0 + 0.29, C.snow);
+        for (const sx of [-0.29, 0.29]) g.box(0.042, 0.016, 0.24, sx, 0.25, z0 + 0.15, C.snow);
+      }
       break;
     }
 
     case 'roof': {
       const col = roofColor(p.c ?? 1, p.lv);
       const cap = wallColor(p.wc, p.tone);
+      const seed = (p.tone || 0) * 7 + p.lv;
+      const litter = SCENE.detail === 2 && !SCENE.snow && LITTER[SCENE.season];
       if (!p.e && !p.w && !p.n && !p.s) {
         g.box(0.93, 0.04, 0.93, 0, 0, 0, C.trim);
         g.cone(0.68, 0.4, 4, 0, 0.04, 0, col, Math.PI / 4);
+        if (SCENE.snow) snowCap(g, 0.68, 0.4, 4, 0.04, Math.PI / 4);
       } else {
-        if (p.e || p.w) prism(g, 'x', p.w ? -0.5 : -0.47, p.e ? 0.5 : 0.47, col, cap);
-        if (p.n || p.s) prism(g, 'z', p.n ? -0.5 : -0.47, p.s ? 0.5 : 0.47, col, cap);
+        for (const axis of ['x', 'z']) {
+          const lo = axis === 'x' ? p.w : p.n;
+          const hi = axis === 'x' ? p.e : p.s;
+          if (!lo && !hi) continue;
+          const a0 = lo ? -0.5 : -0.47;
+          const a1 = hi ? 0.5 : 0.47;
+          prism(g, axis, a0, a1, col, cap);
+          if (SCENE.snow) snowSlopes(g, axis, a0, a1, seed);
+          else if (litter) roofLitter(g, axis, a0, a1, seed, litter);
+        }
       }
       break;
     }
@@ -307,6 +412,7 @@ export function buildPart(kind, p = {}) {
     case 'cone': {
       g.cyl(0.43, 0.41, 0.05, 8, 0, 0, 0, C.stoneDark, Math.PI / 8);
       g.cone(0.46, 0.62, 8, 0, 0.05, 0, C.towerRoof, Math.PI / 8);
+      if (SCENE.snow) snowCap(g, 0.46, 0.62, 8, 0.05, Math.PI / 8);
       g.cyl(0.008, 0.008, 0.2, 5, 0, 0.66, 0, C.metal);
       g.tri([0, 0.86, 0], [0, 0.76, 0], [0.13, 0.81, 0], C.awningA, [0, 0.81, -1]);
       g.tri([0, 0.86, 0], [0, 0.76, 0], [0.13, 0.81, 0], C.awningA, [0, 0.81, 1]);
@@ -319,6 +425,13 @@ export function buildPart(kind, p = {}) {
       if (p.t === 'shop') {
         g.box(0.14, 0.1, 0.14, 0.2, 0.085, -0.2, C.wood);
         g.box(0.1, 0.07, 0.1, 0.03, 0.085, -0.24, C.woodLight);
+      }
+      if (SCENE.snow) {
+        g.box(0.82, 0.01 + 0.012 * SCENE.snow, 0.82, 0, 0.085, 0, C.snow);
+        if (p.t === 'shop') {
+          g.box(0.15, 0.02, 0.15, 0.2, 0.185, -0.2, C.snow);
+          g.box(0.11, 0.02, 0.11, 0.03, 0.155, -0.24, C.snow);
+        }
       }
       break;
     }
@@ -404,6 +517,7 @@ export function buildPart(kind, p = {}) {
       ry = DIR_RY[p.d];
       for (const sx of [-0.4, 0, 0.4]) g.box(0.04, 0.18, 0.04, sx, 0, 0.455, C.wood);
       g.box(0.86, 0.03, 0.03, 0, 0.13, 0.455, C.woodLight);
+      if (SCENE.snow && SCENE.detail) g.box(0.86, 0.016, 0.042, 0, 0.16, 0.455, C.snow);
       break;
     }
 
@@ -415,22 +529,32 @@ export function buildPart(kind, p = {}) {
         const fx = (rand01(p.seed, i, 1) - 0.5) * 0.7;
         let fz = (rand01(p.seed, i, 2) - 0.5) * 0.7;
         if (p.deco >= 1 && fz < -0.15) fz = -fz;
+        if (SCENE.snow) {
+          // 冬天花谢了：一半的位置换成小雪堆
+          if (i % 2 === 0) g.spike(fx, 0.05, fz, 0.07 + rand01(p.seed, i, 3) * 0.05, 0.03 + 0.012 * SCENE.snow, C.snow, 6);
+          continue;
+        }
         g.box(0.015, 0.09, 0.015, fx, 0.05, fz, C.stem);
         g.ball(0.042, fx, 0.155, fz, C.flowers[(p.seed + i) % 5]);
       }
       g.ball(0.1, 0.27, 0.1, p.deco >= 1 ? 0.1 : -0.25, C.leafB);
       g.ball(0.08, -0.3, 0.09, 0.28, C.leafA);
+      if (SCENE.snow) {
+        g.ball(0.07, 0.27, 0.16, p.deco >= 1 ? 0.1 : -0.25, C.snow);
+        g.ball(0.055, -0.3, 0.135, 0.28, C.snow);
+      }
       if (p.deco >= 1) {
         // 长椅
         for (const sx of [-0.12, 0.12]) g.box(0.03, 0.1, 0.08, sx, 0.05, -0.28, C.woodDark);
         g.box(0.3, 0.025, 0.1, 0, 0.15, -0.28, C.wood);
         g.box(0.3, 0.1, 0.02, 0, 0.19, -0.325, C.wood);
+        if (SCENE.snow) g.box(0.28, 0.016, 0.09, 0, 0.175, -0.28, C.snow);
       }
       if (p.deco >= 3) {
         // 小水盆
         g.cyl(0.03, 0.04, 0.14, 8, 0.25, 0.05, 0.27, C.stone);
         g.cyl(0.095, 0.05, 0.045, 8, 0.25, 0.19, 0.27, C.stone);
-        g.cyl(0.075, 0.075, 0.012, 8, 0.25, 0.232, 0.27, C.water);
+        g.cyl(0.075, 0.075, 0.012, 8, 0.25, 0.232, 0.27, SCENE.snow >= 2 ? C.ice : C.water);
       }
       break;
     }
@@ -438,16 +562,55 @@ export function buildPart(kind, p = {}) {
     case 'tree': {
       const ox = (rand01(p.seed, 7) - 0.5) * 0.16;
       const oz = (rand01(p.seed, 8) - 0.5) * 0.16;
-      if (p.seed % 2 === 0) {
+      if (p.seed % 2 === 0 && SCENE.snow) {
+        // 冬天的阔叶树：叶子掉光，只剩枝杈，枝头和树杈上压着雪
+        const sn = SCENE.snow;
+        g.cyl(0.04, 0.06, 0.4, 6, 0, 0, 0, C.trunk);
+        g.add(new THREE.BoxGeometry(0.028, 0.22, 0.028).translate(0, 0.11, 0), C.trunk, 0, 0.38, 0, 0, 0.12, 0.1);
+        g.ball(0.03 + 0.01 * sn, 0.02, 0.61, 0.03, C.snow);
+        for (let k = 0; k < 4; k++) {
+          const a = k * 1.571 + rand01(p.seed, k, 3) * 0.9;
+          const tilt = 0.6 + rand01(p.seed, k, 4) * 0.4;
+          const len = 0.24 + rand01(p.seed, k, 5) * 0.1;
+          const y0 = 0.27 + (k % 2) * 0.09;
+          g.add(new THREE.BoxGeometry(0.03, len, 0.03).translate(0, len / 2, 0), C.trunk, 0, y0, 0, a, 0, tilt);
+          const tx = -Math.sin(tilt) * len * Math.cos(a);
+          const tz = Math.sin(tilt) * len * Math.sin(a);
+          const ty = y0 + Math.cos(tilt) * len;
+          g.ball(0.03 + 0.012 * sn, tx, ty + 0.012, tz, C.snow);
+          g.ball(0.024 + 0.008 * sn, tx * 0.55, y0 + (ty - y0) * 0.55 + 0.025, tz * 0.55, C.snow);
+          // 枝头再分一小杈
+          g.add(new THREE.BoxGeometry(0.02, 0.12, 0.02).translate(0, 0.06, 0), C.trunk, tx * 0.6, y0 + (ty - y0) * 0.6, tz * 0.6, a + 1.1, 0, tilt * 0.5);
+        }
+        g.ball(0.045 + 0.012 * sn, 0, 0.41, 0, C.snow);
+      } else if (p.seed % 2 === 0) {
         g.cyl(0.045, 0.06, 0.28, 6, 0, 0, 0, C.trunk);
         g.ball(0.27, 0, 0.47, 0, C.leafA, 1);
         g.ball(0.19, 0.14, 0.63, 0.05, C.treeTop, 1);
         g.ball(0.17, -0.13, 0.58, -0.09, C.leafB, 1);
+        if (SCENE.season === 0 && SCENE.detail) {
+          // 春天：树冠上缀几朵花
+          for (let k = 0; k < 7; k++) {
+            const a = k * 0.9 + rand01(p.seed, k, 6) * 0.8;
+            const up = 0.15 + rand01(p.seed, k, 7) * 1.0;
+            g.ball(0.04, Math.cos(a) * Math.cos(up) * 0.27, 0.47 + Math.sin(up) * 0.27, Math.sin(a) * Math.cos(up) * 0.27, LITTER[0][k % 3]);
+          }
+        }
       } else {
         g.cyl(0.04, 0.055, 0.22, 6, 0, 0, 0, C.trunk);
-        g.cone(0.3, 0.36, 7, 0, 0.18, 0, C.pineA);
-        g.cone(0.24, 0.32, 7, 0, 0.4, 0, C.pineB);
-        g.cone(0.16, 0.28, 7, 0, 0.62, 0, C.pineA);
+        const tiers = [
+          [0.3, 0.36, 0.18, C.pineA],
+          [0.24, 0.32, 0.4, C.pineB],
+          [0.16, 0.28, 0.62, C.pineA],
+        ];
+        for (const [r, h, y, col] of tiers) {
+          g.cone(r, h, 7, 0, y, 0, col);
+          // 冬天：每一层的尖上盖一圈雪
+          if (SCENE.snow) {
+            const s = 0.36 + 0.1 * SCENE.snow;
+            g.cone(r * s + 0.02, h * s, 7, 0, y + h * (1 - s) + 0.014, 0, C.snow);
+          }
+        }
       }
       g.scale(0.85 + rand01(p.seed, 9) * 0.3);
       for (let i = 0; i < g.pos.length; i += 3) {
@@ -465,6 +628,7 @@ export function buildPart(kind, p = {}) {
       g.box(0.12, 0.02, 0.12, 0, 0.55, 0, C.metal);
       glow.box(0.085, 0.1, 0.085, 0, 0.57, 0, '#fff');
       g.cone(0.095, 0.06, 4, 0, 0.67, 0, C.metal, Math.PI / 4);
+      if (SCENE.snow && SCENE.detail) g.cone(0.075, 0.045, 4, 0, 0.7, 0, C.snow, Math.PI / 4);
       const disc = new THREE.Mesh(glowDisc, mats.lampGlow);
       disc.position.y = 0.07;
       disc.userData.fx = true;
@@ -500,11 +664,15 @@ export function buildPart(kind, p = {}) {
     case 'well': {
       g.cyl(0.25, 0.27, 0.18, 10, 0, 0, 0, C.stoneDark);
       g.cyl(0.27, 0.27, 0.045, 10, 0, 0.18, 0, C.stone);
-      g.cyl(0.2, 0.2, 0.012, 10, 0, 0.222, 0, C.water);
+      g.cyl(0.2, 0.2, 0.012, 10, 0, 0.222, 0, SCENE.snow >= 2 ? C.ice : C.water);
       for (const sx of [-0.215, 0.215]) g.box(0.035, 0.36, 0.035, sx, 0.2, 0, C.wood);
       g.box(0.5, 0.03, 0.03, 0, 0.5, 0, C.woodDark);
       g.add(new THREE.BoxGeometry(0.56, 0.022, 0.22), C.roofs[0], 0, 0.6, 0.09, 0, 0.5);
       g.add(new THREE.BoxGeometry(0.56, 0.022, 0.22), C.roofs[1], 0, 0.6, -0.09, 0, -0.5);
+      if (SCENE.snow && SCENE.detail) {
+        g.add(new THREE.BoxGeometry(0.5, 0.02, 0.13).translate(0, 0.021, -0.04), C.snow, 0, 0.6, 0.09, 0, 0.5);
+        g.add(new THREE.BoxGeometry(0.5, 0.02, 0.13).translate(0, 0.021, 0.04), C.snow, 0, 0.6, -0.09, 0, -0.5);
+      }
       g.box(0.008, 0.16, 0.008, 0.04, 0.34, 0, C.woodLight);
       g.cyl(0.045, 0.035, 0.07, 8, 0.04, 0.28, 0, C.wood);
       break;
@@ -514,10 +682,15 @@ export function buildPart(kind, p = {}) {
       g.box(0.94, 0.03, 0.94, 0, 0, 0, C.fieldRow);
       g.box(0.88, 0.045, 0.88, 0, 0, 0, C.fieldSoil);
       const kindOf = p.seed % 3;
-      const big = p.deco >= 1 ? 1.3 : 1;
+      // 春天刚出苗，个头小；冬天地里空着，垄上盖着雪
+      const big = (p.deco >= 1 ? 1.3 : 1) * (SCENE.season === 0 ? 0.6 : 1);
       for (let i = 0; i < 4; i++) {
         const rz = -0.3 + i * 0.2;
         g.box(0.8, 0.03, 0.11, 0, 0.045, rz, C.fieldRow);
+        if (SCENE.snow) {
+          g.box(0.74 + rand01(p.seed, i, 9) * 0.06, 0.008 + 0.008 * SCENE.snow, 0.08, 0, 0.075, rz, C.snow);
+          continue;
+        }
         for (let k = 0; k < 4; k++) {
           const cx = -0.3 + k * 0.2 + (rand01(p.seed, i, k) - 0.5) * 0.05;
           if (kindOf === 0) {
@@ -541,6 +714,7 @@ export function buildPart(kind, p = {}) {
         g.box(0.14, 0.13, 0.05, 0.33, 0.24, -0.33, C.awningA);
         g.ball(0.05, 0.33, 0.44, -0.33, C.straw);
         g.cone(0.085, 0.07, 6, 0.33, 0.47, -0.33, C.wheat);
+        if (SCENE.snow) g.cone(0.06, 0.04, 6, 0.33, 0.505, -0.33, C.snow);
       }
       break;
     }
@@ -555,6 +729,7 @@ export function buildPart(kind, p = {}) {
         g.box(0.05, 0.04, 0.66, s, 0.54, 0, C.woodDark);
       }
       g.cone(0.6, 0.3, 4, 0, 0.58, 0, C.pavRoof, Math.PI / 4);
+      if (SCENE.snow) snowCap(g, 0.6, 0.3, 4, 0.58, Math.PI / 4);
       g.ball(0.035, 0, 0.9, 0, C.spark);
       // 靠北一侧的长凳
       g.box(0.42, 0.03, 0.1, 0, 0.19, -0.3, C.woodLight);
@@ -563,14 +738,15 @@ export function buildPart(kind, p = {}) {
     }
 
     case 'fountain': {
+      const frozen = SCENE.snow >= 2; // 冬天结冰，不喷水
       g.cyl(0.42, 0.44, 0.14, 10, 0, 0, 0, C.stone);
-      g.cyl(0.35, 0.35, 0.012, 10, 0, 0.14, 0, C.water);
+      g.cyl(0.35, 0.35, 0.012, 10, 0, 0.14, 0, frozen ? C.ice : C.water);
       g.cyl(0.05, 0.075, 0.3, 8, 0, 0.14, 0, C.stoneDark);
       g.cyl(0.17, 0.07, 0.06, 8, 0, 0.44, 0, C.stone);
-      g.cyl(0.14, 0.14, 0.01, 8, 0, 0.5, 0, C.water);
+      g.cyl(0.14, 0.14, 0.01, 8, 0, 0.5, 0, frozen ? C.ice : C.water);
       g.cyl(0.02, 0.03, 0.1, 6, 0, 0.5, 0, C.stoneDark);
-      g.ball(0.045, 0, 0.63, 0, C.drop);
-      data.spray = [0, 0.64, 0];
+      g.ball(0.045, 0, 0.63, 0, frozen ? C.snow : C.drop);
+      if (!frozen) data.spray = [0, 0.64, 0];
       break;
     }
 
@@ -586,6 +762,7 @@ export function buildPart(kind, p = {}) {
       for (let i = 0; i < 6; i++) {
         g.add(new THREE.BoxGeometry(0.155, 0.025, 0.96), i % 2 ? C.canopyB : C.canopyA, -0.3875 + i * 0.155, 0.61, 0, 0, 0.16);
       }
+      if (SCENE.snow) g.add(new THREE.BoxGeometry(0.9, 0.012 + 0.008 * SCENE.snow, 0.3 + 0.1 * SCENE.snow).translate(0, 0.024, -0.3 + 0.05 * SCENE.snow), C.snow, 0, 0.61, 0, 0, 0.16);
       // 前面的货台和上面的货
       g.box(0.7, 0.2, 0.2, 0, 0.03, 0.27, C.woodLight);
       g.box(0.74, 0.025, 0.24, 0, 0.23, 0.27, C.wood);
@@ -646,6 +823,7 @@ export function buildPart(kind, p = {}) {
       g.cyl(0.25, 0.36, 1.0, 8, 0, 0, 0, C.millWall, Math.PI / 8);
       g.cyl(0.29, 0.29, 0.05, 8, 0, 1.0, 0, C.woodDark, Math.PI / 8);
       g.cone(0.32, 0.3, 8, 0, 1.05, 0, C.millRoof, Math.PI / 8);
+      if (SCENE.snow) snowCap(g, 0.32, 0.3, 8, 1.05, Math.PI / 8);
       g.box(0.2, 0.34, 0.05, 0, 0, 0.31, C.frame);
       g.box(0.15, 0.3, 0.06, 0, 0, 0.31, C.door);
       g.box(0.26, 0.03, 0.12, 0, 0, 0.38, C.stone);
@@ -684,6 +862,7 @@ export function buildPart(kind, p = {}) {
       glow.cyl(0.13, 0.13, 0.2, 8, 0, 1.64, 0, '#fff', Math.PI / 8);
       g.cyl(0.16, 0.16, 0.025, 8, 0, 1.84, 0, C.metal, Math.PI / 8);
       g.cone(0.2, 0.2, 8, 0, 1.865, 0, C.lightRed, Math.PI / 8);
+      if (SCENE.snow) snowCap(g, 0.2, 0.2, 8, 1.865, Math.PI / 8);
       g.ball(0.025, 0, 2.08, 0, C.metal);
       const beam = new THREE.Mesh(beamGeo, mats.beam);
       beam.position.y = 1.74;
@@ -824,6 +1003,120 @@ export function buildZoneSand(world, zone) {
   const mesh = new THREE.Mesh(g.build(), mats.solid);
   mesh.receiveShadow = true;
   return mesh;
+}
+
+// 草地上的零碎：春天的野花、夏天的草丛、秋天树下的落叶、冬天的雪堆和池塘的冰，还有下雨时的水洼。
+// 整座岛合成两个网格（零碎一个、水洼一个）。只画在已经长出来的陆地上；盖了东西的格子不画。
+// raised(zone)：这一片陆地是不是已经长好了
+export function buildScatter(world, raised) {
+  const { season, snow, detail } = SCENE;
+  if (!detail) return { ground: null, puddles: null };
+  const g = new Geo();
+  const pg = new Geo();
+  const dens = detail === 2 ? 1 : 0.5;
+  const litter = snow ? null : LITTER[season];
+  const leafy = (x, z) => {
+    const c = world.cell(x, z);
+    return !!c && !!c.g && c.g.t === 'tree' && (hash(x, z) % 16) % 2 === 0;
+  };
+  for (let z = 0; z < SIZE; z++) {
+    for (let x = 0; x < SIZE; x++) {
+      const c = world.cell(x, z);
+      if (c.zone < 0 || !raised(c.zone)) continue;
+      const cx = wx(x);
+      const cz = wx(z);
+      const R = (k) => rand01(x, z, 60 + k);
+      const at = (k, spread = 0.84) => [cx + (R(k) - 0.5) * spread, cz + (R(k + 1) - 0.5) * spread];
+      if (c.pond) {
+        if (snow >= 2) {
+          // 池塘结冰：一层冰面，上面两道浅浅的裂纹
+          g.flat([[cx - 0.5, cz - 0.5], [cx + 0.5, cz - 0.5], [cx + 0.5, cz + 0.5], [cx - 0.5, cz + 0.5]], -0.172, C.ice);
+          for (let i = 0; i < 2; i++) {
+            const [px, pz] = at(i * 2, 0.6);
+            const a = R(8 + i) * 3.14;
+            const dx = Math.cos(a) * 0.22;
+            const dz = Math.sin(a) * 0.22;
+            g.flat([[px - dx, pz - dz], [px - dz * 0.08, pz + dx * 0.08], [px + dx, pz + dz], [px + dz * 0.08, pz - dx * 0.08]], -0.17, C.snow);
+          }
+        }
+        continue;
+      }
+      const tree = !!c.g && c.g.t === 'tree';
+      if ((c.g && !tree) || c.s.length) continue;
+
+      // 树下和树旁边的落叶（春天是花瓣）
+      if (litter) {
+        let near = 0;
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && leafy(x + dx, z + dz)) near++;
+        let n = (leafy(x, z) ? 9 : 0) + near * 3 + (R(0) < 0.3 ? 1 : 0);
+        n = Math.round(n * dens * (season === 0 ? 0.6 : 1));
+        for (let i = 0; i < Math.min(n, 14); i++) {
+          const px = cx + (rand01(x, z, i, 71) - 0.5) * 0.9;
+          const pz = cz + (rand01(x, z, i, 72) - 0.5) * 0.9;
+          const r = 0.03 + rand01(x, z, i, 73) * 0.022;
+          const a = rand01(x, z, i, 74) * 6.28;
+          const ux = Math.cos(a) * r;
+          const uz = Math.sin(a) * r;
+          g.flat([[px + ux, pz + uz], [px - uz * 0.55, pz + ux * 0.55], [px - ux, pz - uz], [px + uz * 0.55, pz - ux * 0.55]], 0.004 + (i % 3) * 0.001, litter[(i + x + z) % litter.length]);
+        }
+      }
+      if (tree) continue;
+
+      if (snow) {
+        // 雪堆，偶尔有枯草从雪里露出来
+        if (R(1) < (0.1 + 0.06 * snow) * dens) {
+          const [px, pz] = at(2, 0.6);
+          g.spike(px, 0, pz, 0.13 + R(4) * 0.1, 0.022 + 0.01 * snow, C.snow, 7, R(5) * 3);
+          if (R(6) < 0.5) g.spike(px + 0.16, 0, pz + 0.09, 0.08 + R(7) * 0.05, 0.016 + 0.008 * snow, C.snowShade, 6, R(8) * 3);
+        }
+        if (R(9) < 0.14 * dens) {
+          const [px, pz] = at(10, 0.7);
+          for (let i = 0; i < 3; i++) g.spike(px + (i - 1) * 0.035, 0, pz + (i % 2) * 0.03, 0.014, 0.07 + i * 0.015, C.tuft);
+        }
+      } else {
+        // 草丛
+        if (R(1) < (season === 0 ? 0.3 : 0.42) * dens) {
+          const [px, pz] = at(2);
+          for (let i = 0; i < 3; i++) g.spike(px + (i - 1) * 0.04, 0, pz + (i % 2) * 0.035, 0.018, 0.07 + R(4 + i) * 0.05, C.tuft, 3, i);
+        }
+        // 野花：春天多，夏天零星几朵，秋天没有
+        const chance = season === 0 ? 0.55 : season === 1 ? 0.16 : 0;
+        if (R(9) < chance * dens) {
+          const count = season === 0 ? 1 + Math.floor(R(10) * 3) : 1;
+          for (let i = 0; i < count; i++) {
+            const px = cx + (rand01(x, z, i, 81) - 0.5) * 0.8;
+            const pz = cz + (rand01(x, z, i, 82) - 0.5) * 0.8;
+            g.spike(px, 0, pz, 0.011, 0.08, C.stem);
+            g.spike(px, 0.066, pz, 0.036, 0.034, C.flowers[hash(x, z, i) % 5], 4, i);
+          }
+        }
+        // 下雨时的水洼
+        if (R(13) < 0.17) {
+          const [px, pz] = at(14, 0.5);
+          const r0 = 0.15 + R(16) * 0.1;
+          const pts = [];
+          for (let i = 0; i < 7; i++) {
+            const a = (i / 7) * 6.2832;
+            const r = r0 * (0.75 + rand01(x, z, i, 91) * 0.5);
+            pts.push([px + Math.cos(a) * r * 1.25, pz + Math.sin(a) * r]);
+          }
+          pg.flat(pts, 0.006, '#ffffff');
+        }
+      }
+    }
+  }
+  let ground = null;
+  if (!g.empty) {
+    ground = new THREE.Mesh(g.build(), mats.solid);
+    ground.receiveShadow = true;
+  }
+  let puddles = null;
+  if (!pg.empty) {
+    puddles = new THREE.Mesh(pg.build(), mats.puddle);
+    puddles.receiveShadow = true;
+    puddles.renderOrder = 1;
+  }
+  return { ground, puddles };
 }
 
 // 水下的浅滩、礁石和海面
