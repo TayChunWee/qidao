@@ -182,17 +182,54 @@ export class UI {
     const bar = $('#tool-list');
     const acts = $('#acts');
     this.toolBar = bar;
-    // 一排放不下的时候，滚轮上下滚也能把这一排左右挪
+    // 这一排放不下所有模块的时候可以左右滚。barGoal：正在滑向的位置，没在滑就是 null
+    this.barGoal = null;
+    const maxScroll = () => Math.max(0, bar.scrollWidth - bar.clientWidth);
+    // 哪一头还有没露出来的模块（样式据此把那一头淡出）
+    this.syncBar = () => {
+      bar.classList.toggle('more-l', bar.scrollLeft > 2);
+      bar.classList.toggle('more-r', bar.scrollLeft < maxScroll() - 2);
+    };
+    const glide = () => {
+      if (this.barGoal === null) return;
+      const d = this.barGoal - bar.scrollLeft;
+      const was = bar.scrollLeft;
+      if (Math.abs(d) >= 1) bar.scrollLeft += Math.abs(d * 0.28) < 1 ? Math.sign(d) : d * 0.28;
+      // 到了，或者挪不动了
+      if (Math.abs(d) < 1 || bar.scrollLeft === was) {
+        this.barGoal = null;
+        return;
+      }
+      requestAnimationFrame(glide);
+    };
+    this.scrollBar = (to) => {
+      const idle = this.barGoal === null;
+      this.barGoal = Math.min(maxScroll(), Math.max(0, to));
+      if (idle) requestAnimationFrame(glide);
+    };
+    // 鼠标停在这一排上滚滚轮，或者触控板双指左右滑，都是左右滚
     bar.addEventListener(
       'wheel',
       (e) => {
-        if (bar.scrollWidth <= bar.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-        bar.scrollLeft += e.deltaY;
+        if (maxScroll() <= 0) return;
         e.preventDefault();
         e.stopPropagation();
+        const unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? bar.clientWidth : 1;
+        const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
+        if (!d) return;
+        if (e.deltaMode === 0 && Math.abs(d) < 40) {
+          // 触控板一次只挪一点点：直接跟着手指走
+          this.barGoal = null;
+          bar.scrollLeft += d;
+        } else {
+          // 鼠标滚轮一格跳得远：滑过去
+          this.scrollBar((this.barGoal ?? bar.scrollLeft) + d);
+        }
       },
       { passive: false },
     );
+    bar.addEventListener('scroll', this.syncBar, { passive: true });
+    window.addEventListener('resize', this.syncBar);
     for (const m of MODULES) {
       const b = document.createElement('button');
       b.className = 'tool';
@@ -298,6 +335,35 @@ export class UI {
       if (k === id) el.classList.remove('fresh');
     }
     for (const m of MODULES) this.toolEls.get(m.id).hidden = m.tab !== id;
+    // 换了一页：从头看起；这一页里有刚解锁的就直接滚到它那儿
+    const bar = this.toolBar;
+    bar.classList.toggle('tab-paint', id === 'paint');
+    this.barGoal = null;
+    bar.scrollLeft = 0;
+    this.revealFresh();
+    this.syncBar();
+  }
+
+  // 把某个模块滚进这一排看得见的地方（本来就看得见的不动）
+  revealTool(el) {
+    const bar = this.toolBar;
+    if (!el || !el.offsetParent || bar.scrollWidth <= bar.clientWidth) return;
+    const r = el.getBoundingClientRect();
+    const br = bar.getBoundingClientRect();
+    const pad = 40; // 两头淡出的那一段不算看得见
+    if (r.left < br.left + pad) this.scrollBar(bar.scrollLeft - (br.left + pad - r.left));
+    else if (r.right > br.right - pad) this.scrollBar(bar.scrollLeft + (r.right - (br.right - pad)));
+  }
+
+  // 当前这一页里刚解锁的模块如果在外面，滚过去让玩家看见
+  revealFresh() {
+    for (const m of MODULES) {
+      const el = this.toolEls.get(m.id);
+      if (m.tab === this.tab && el.classList.contains('fresh')) {
+        this.revealTool(el);
+        return;
+      }
+    }
   }
 
   // 哪些模块已经解锁。fresh：这次刚解锁的，高亮提示一下
@@ -315,20 +381,16 @@ export class UI {
         setTimeout(() => el.classList.remove('fresh'), 45000);
       }
     }
+    if (fresh.length) this.revealFresh();
   }
 
   setTool(id) {
-    const bar = this.toolBar;
     for (const [k, el] of this.toolEls) {
       el.classList.toggle('on', k === id);
       if (k !== id) continue;
       el.classList.remove('fresh');
-      // 用键盘选中的模块如果滚到了外面，把它挪回来
-      if (bar.scrollWidth <= bar.clientWidth || !el.offsetParent) continue;
-      const r = el.getBoundingClientRect();
-      const br = bar.getBoundingClientRect();
-      if (r.left < br.left) bar.scrollLeft -= br.left - r.left + 8;
-      else if (r.right > br.right) bar.scrollLeft += r.right - br.right + 8;
+      // 选中的模块如果在外面或者压在淡出的边上，把它挪进来
+      this.revealTool(el);
     }
   }
 
