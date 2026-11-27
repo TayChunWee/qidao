@@ -1,9 +1,9 @@
 // 界面层：全部是叠在画布上的普通网页元素。
 import { MODULES, TABS, VERSION, AUTHOR } from './config.js';
 import { LEVELS, unlockLevel } from './progression.js';
-import { FPS_CHOICES } from './perf.js';
+import { FPS_CHOICES, QUALITY_MODES } from './perf.js';
 import { TRACKS } from './music.js';
-import { t, nameOf, LANGS, getLang } from './i18n.js';
+import { t, nameOf, descOf, LANGS, getLang } from './i18n.js';
 import { feedbackOn, cooling, KINDS, MAX_LEN, MIN_LEN } from './feedback.js';
 
 const svg = (inner) => `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
@@ -28,6 +28,9 @@ const ICON = {
   turn: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>'),
   hand: svg('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V11"/><path d="M14 11V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-.5a6 6 0 0 1-5-2.7L3.3 14a1.5 1.5 0 0 1 2.5-1.6L8 15"/>'),
   globe: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-5 5-5 13 0 18c5-5 5-13 0-18"/>'),
+  layers: svg('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
+  leaf: svg('<path d="M5 19c0-8 5-13 14-14 0 9-5 14-14 14z"/><path d="M5 19 13 11"/>'),
+  cloud: svg('<path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.3 3.3 0 0 1 17.5 17z"/><path d="M9 20v1M13 20v1M17 20v1"/>'),
 };
 
 // 四档心情 + 难过，对应嘴巴的形状
@@ -137,6 +140,10 @@ export class UI {
     this.setNowPlaying(this.nowTrack, this.nowResting);
 
     for (const b of $('#hand-seg').children) b.textContent = t(`hand.${b.dataset.hand}`);
+    for (const b of $('#quality-seg').children) b.textContent = t(`q.${b.dataset.v}`);
+    for (const b of $('#season-seg').children) b.textContent = t('season', +b.dataset.v);
+    for (const b of $('#wx-seg').children) b.textContent = t(`wx.${b.dataset.v}`);
+    if (this.season !== undefined) this.setSeason(this.season);
     $('#theme').innerHTML = THEMES.map((m) => `<option value="${m}">${t(`theme.${m}`)}</option>`).join('');
     $('#theme').value = this.themeMode;
 
@@ -182,7 +189,7 @@ export class UI {
         `<span class="need">${ICON.lock}<em>${LEVELS[unlockLevel(m.id)].need}</em></span>`;
       b.addEventListener('click', () => this.h.selectTool(m.id));
       const name = () => nameOf(m.id);
-      this.bindTip(b, name, () => (this.unlocked.has(m.id) ? t(`desc.${m.id}`) : t('tool.locked', LEVELS[unlockLevel(m.id)].need)));
+      this.bindTip(b, name, () => (this.unlocked.has(m.id) ? descOf(m.id) : t('tool.locked', LEVELS[unlockLevel(m.id)].need)));
       bar.appendChild(b);
       this.toolEls.set(m.id, b);
       this.toolNames.set(m.id, name);
@@ -390,6 +397,26 @@ export class UI {
     if (this.tutRender) this.tutRender();
   }
 
+  setQuality(mode) {
+    for (const b of $('#quality-seg').children) b.classList.toggle('on', b.dataset.v === mode);
+  }
+
+  // 时钟旁边写着现在是哪个季节
+  setSeason(s) {
+    this.season = s;
+    $('#clock-season').textContent = t('season', s);
+  }
+
+  // 测试用的那两行开关：只在测试地址和本机上露出来
+  showTest(on) {
+    for (const el of document.querySelectorAll('.test-only')) el.hidden = !on;
+  }
+
+  setTest(season, wx) {
+    for (const b of $('#season-seg').children) b.classList.toggle('on', +b.dataset.v === season);
+    for (const b of $('#wx-seg').children) b.classList.toggle('on', b.dataset.v === wx);
+  }
+
   // 用哪只手拿手机：常点的按钮靠那一边
   setHand(hand) {
     this.hand = HANDS.includes(hand) ? hand : 'right';
@@ -520,6 +547,23 @@ export class UI {
       this.h.setFps(+b.dataset.fps);
     });
     $('#show-fps').addEventListener('change', (e) => this.h.setShowFps(e.target.checked));
+    // 画质，以及测试地址上才有的换季节、换天气。按钮上的字在 applyLang 里填
+    $('#ico-quality').innerHTML = ICON.layers;
+    $('#ico-season').innerHTML = ICON.leaf;
+    $('#ico-wx').innerHTML = ICON.cloud;
+    const segOf = (id, values, pick) => {
+      const el = $(id);
+      el.innerHTML = values.map((v) => `<button data-v="${v}"></button>`).join('');
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        this.h.clickSound();
+        pick(b.dataset.v);
+      });
+    };
+    segOf('#quality-seg', QUALITY_MODES, (v) => this.h.setQuality(v));
+    segOf('#season-seg', [0, 1, 2, 3], (v) => this.h.setSeason(+v));
+    segOf('#wx-seg', ['auto', 'clear', 'wet'], (v) => this.h.setWx(v));
     this.fpsEl = $('#fps');
     this.fpsCap = 144;
     this.hz = 0;

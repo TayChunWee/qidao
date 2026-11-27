@@ -42,10 +42,19 @@ export function t(key, ...args) {
 }
 
 // 模块的说明。有几句提到了键盘鼠标的，另有一份给触屏用的写法（键名后面带 .touch）
+// 粉刷的十二样工具（wall0…roof5）共用两条文字，颜色当参数传进去
+const BRUSH = /^(wall|roof)(\d)$/;
+
 export function descOf(id, touch) {
-  const key = `desc.${id}.touch`;
-  return t(touch && (DICT[cur][key] !== undefined || zh[key] !== undefined) ? key : `desc.${id}`);
+  const m = BRUSH.exec(id);
+  const base = m ? `desc.${m[1]}Paint` : `desc.${id}`;
+  const key = `${base}.touch`;
+  const use = touch && (DICT[cur][key] !== undefined || zh[key] !== undefined) ? key : base;
+  return m ? t(use, Number(m[2])) : t(use);
 }
 
 // 模块的名字
-export const nameOf = (id) => t(`name.${id}`);
+export const nameOf = (id) => {
+  const m = BRUSH.exec(id);
+  return m ? t(`name.${m[1]}Paint`, Number(m[2])) : t(`name.${id}`);
+};

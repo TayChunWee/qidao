@@ -1,6 +1,7 @@
 // 中文文字表。其他语言缺了哪一句，都会退回到这里。
 const DIR = ['北', '东', '南', '西'];
 const CN = ['零', '一', '二', '三', '四', '五'];
+const COLOR = ['白', '红', '黄', '绿', '蓝', '紫'];
 // "几格内"的说法。格数按周围一圈一圈算，斜着的也算一格。
 const within = (r) => `${['零', '一', '两', '三', '四', '五'][r]}格内`;
 
@@ -23,6 +24,7 @@ const NAME = {
   greenhouse: '温室',
   windmill: '风车',
   lighthouse: '灯塔',
+  paint: '粉刷',
 };
 
 const DESC = {
@@ -90,6 +92,12 @@ const RES = {
   yin: ['阿吟', '想住在凉亭旁边写诗', '我想住在凉亭旁边，坐在里面写诗。', '有水有树，句子自己就来了。只是附近再安静些就好了。', '静得能听见落叶。今天写了三首。'],
   fu: ['阿福', '想住在集市旁边', '我是摆摊的，想住在集市旁边，出门就开张。', '今天又卖空了！旁边要是再开家小店，就成一条街了。', '集市连着小店，整条街都是吆喝声！'],
   di: ['阿笛', '想要一个能安静吹笛子的阳台', '我想要一个阳台，傍晚在上面吹笛子，周围别太吵。', '水声和笛声很配。要是楼下有座凉亭，就有人坐着听了。', '凉亭里坐满了听笛子的人。'],
+  cai: ['阿彩', '想要一间颜色和邻居不一样的房间', '我是画画的。我想和邻居挨着住，但我家的墙要有自己的颜色。', '一眼就能认出我家了！要是屋顶的颜色也是全岛独一份就更好了。', '全岛只有我家是这个颜色的屋顶，像签了名一样。'],
+  qi: ['阿齐', '想和隔壁刷成一样的颜色', '我喜欢整整齐齐的。给我一间路边的小屋，和隔壁刷成同一种颜色。', '和隔壁一个颜色，看着真舒服。要是两家的屋顶也连成一片、换个鲜亮的颜色就更好了。', '墙一样，屋顶也连成一片，整整齐齐！'],
+  hong: ['虹姐', '想从阳台看到五颜六色的屋顶', '我想要一个朝北的阳台，望出去屋顶是五颜六色的。', '屋顶真热闹！要是我自己家的墙是黄色的就更好了。', '黄墙配着满眼的彩色屋顶，心情都亮了。'],
+  lan: ['老蓝', '想在水边看着蓝色的屋顶', '我跑了半辈子船。给我一间离水近的小屋，附近要有蓝色的屋顶。', '蓝屋顶像海一样。要是我自己的屋顶是白色的，就像船帆了。', '白顶挨着蓝顶，像帆和海。我这是到家了。'],
+  mei: ['梅姨', '想要一间安静、看得见树的房间', '我想要一间安静的房间，窗外看得见树。', '清清静静的，真好。要是墙是红色的，像梅花一样就更好了。', '红墙衬着绿树，像梅花开了。'],
+  zi: ['小紫', '想住在屋顶与众不同的楼顶', '我想住在最顶上，而且屋顶的颜色要和隔壁都不一样。', '一眼就能找到我家！要是屋顶是紫色的就更好了，那是我最喜欢的颜色。', '紫色的屋顶，全世界最好看！'],
   deng: ['老灯', '想守着一座灯塔', '我守了一辈子灯塔。给我一间紧挨着灯塔的小屋就行。', '灯每晚都亮着。要是旁边有个码头，就能看着船回来了。', '船顺着灯光回来，稳稳靠上码头。'],
 };
 
@@ -121,6 +129,18 @@ const dict = {
   'theme.light': '浅色',
   'theme.dark': '深色',
   'set.showFps': '在角落显示帧率',
+  'set.quality': '画质',
+  'q.auto': '自动',
+  'q.low': '低',
+  'q.mid': '中',
+  'q.high': '高',
+  'set.season': '季节 · 测试',
+  'set.wx': '天气 · 测试',
+  'wx.auto': '照常',
+  'wx.clear': '晴',
+  'wx.wet': '雨雪',
+  season: (s) => ['春', '夏', '秋', '冬'][s],
+  'season.now': (s) => ['春天来了', '夏天到了', '秋天到了', '冬天来了'][s],
   'set.reset': '重新开始',
   'set.resetConfirm': '再点一次确认',
   'set.feedback': '反馈与建议',
@@ -196,6 +216,7 @@ const dict = {
   // ---------- 工具栏 ----------
   'tab.build': '建筑',
   'tab.ground': '地面',
+  'tab.paint': '粉刷',
   'tab.tip': '<kbd>Tab</kbd> 切换',
   'tool.locked': (need) => `繁荣度达到 ${need} 时解锁。`,
   'act.move': '搬动',
@@ -248,6 +269,7 @@ const dict = {
   'hint.confirm': '按 Enter 确定 · Esc 取消',
   'aim.tap': '点一下想放的位置',
   'aim.paint': '点一下就放下，可以连着点',
+  'aim.brush': '点一下房子就刷上，可以连着点',
   'aim.remove': '点一下想拆的东西',
   'aim.again': '再点一次放下',
   'aim.againRemove': '再点一次拆掉',
@@ -288,6 +310,10 @@ const dict = {
   'why.balconyFloor': '阳台要装在二层以上',
   'why.balconyTaken': '这面墙已经有阳台了',
   'why.wallBlocked': '这面墙被隔壁挡住了',
+  'why.paintNothing': '这里没有能刷的房子',
+  'why.paintWall': '只有房间的外墙能刷',
+  'why.paintRoof': '这栋楼没有能刷的屋顶',
+  'why.paintSame': '已经是这个颜色了',
   'why.moveOff': '挪到小岛外面去了',
   'why.moveDockWater': '码头要放在水面上',
   'why.moveWater': '不能放在水面上噢~',
@@ -345,6 +371,20 @@ const dict = {
   'c.sunny.say': '旁边的楼太高，晒不到太阳。两格内别超过两层就好。',
   'c.joined.need': '想和隔壁的房间连在一起',
   'c.joined.say': '一个人住有点冷清，想挨着邻居。',
+  'c.wallIs.need': (k) => `想把自己家的墙刷成${COLOR[k]}色`,
+  'c.wallIs.say': (k) => `墙要是${COLOR[k]}色的就好了。`,
+  'c.roofIs.need': (k) => `想要${COLOR[k]}色的屋顶`,
+  'c.roofIs.say': (k) => `屋顶要是${COLOR[k]}色的就好了。`,
+  'c.wallUnlike.need': '墙的颜色要和同层紧挨着的房间都不一样',
+  'c.wallUnlike.say': '我家的墙和隔壁一个颜色，都分不出哪间是我的了。',
+  'c.wallPair.need': '想和隔壁的房间刷成同一种颜色（白色不算）',
+  'c.wallPair.say': '想和隔壁刷成一样的颜色，白墙太素了。',
+  'c.roofUnlike.need': '屋顶的颜色要和紧挨着的房子都不一样',
+  'c.roofUnlike.say': '我的屋顶和隔壁一个颜色，一点也不显眼。',
+  'c.roofNear.need': (k, r) => `${within(r)}想有一栋${COLOR[k]}顶的房子`,
+  'c.roofNear.say': (k) => `要是出门就能看到${COLOR[k]}色的屋顶就好了。`,
+  'c.roofKinds.need': (n, r) => `${within(r)}要有${CN[n]}种颜色的屋顶`,
+  'c.roofKinds.say': '望出去屋顶都是一个颜色，想热闹一点。',
   'c.alone.need': '周围一圈不能有别的房子',
   'c.alone.say': '邻居挨得太近了，想清静一点。',
   'c.fields.need': (n) => (n === 1 ? '房子旁边要有菜地' : `想挨着${CN[n]}块菜地`),
@@ -352,6 +392,7 @@ const dict = {
 
   // 个别居民对同一个条件有自己的说法
   's.tang.high': '再高一点就好了，三层以上视野才开阔。',
+  's.lan.water': '离水太远了，听不见浪声我睡不着。',
   's.tie.water': '打铁要用水，想离水边近一点。',
   's.xing.tallest': '旁边有楼比塔还高，挡住了星空。',
   's.doorWater': '想推开门就是水。',
@@ -392,11 +433,20 @@ const dict = {
   'bonus.avoid.text': (name, r) => `想离${name}家远一点（隔${CN[r]}格）`,
   'bonus.avoid.say': (name) => `${name}那边太热闹了，我想住得远一点。`,
   'bonus.avoid.done': '这下清静多了。',
+  'bonus.wall.text': (k) => `想把自己家的墙刷成${COLOR[k]}色`,
+  'bonus.wall.say': (k) => `最近总觉得，家里的墙要是${COLOR[k]}色的就好了。`,
+  'bonus.wall.done': (k) => `墙刷成${COLOR[k]}色了，越看越喜欢！`,
   neighbor: '邻居',
 };
 
 // 指南针上的四个字
 DIR.forEach((d, i) => (dict[`compass.${i}`] = d));
+// 粉刷的十二样工具：名字和说明按颜色拼出来
+dict['name.wallPaint'] = (k) => `${COLOR[k]}墙`;
+dict['name.roofPaint'] = (k) => `${COLOR[k]}顶`;
+dict['desc.wallPaint'] = (k) => `把一间房间的外墙刷成${COLOR[k]}色，指着哪一层就刷哪一层。按住拖动可以连着刷。`;
+dict['desc.wallPaint.touch'] = (k) => `把一间房间的外墙刷成${COLOR[k]}色，点哪一层就刷哪一层。`;
+dict['desc.roofPaint'] = (k) => `把一栋楼的屋顶刷成${COLOR[k]}色。只有顶上是房间的楼能刷。`;
 for (const [id, v] of Object.entries(NAME)) dict[`name.${id}`] = v;
 for (const [id, v] of Object.entries(DESC)) dict[`desc.${id}`] = v;
 for (const [id, v] of Object.entries(RES)) ['name', 'wish', 'ask', 'almost', 'happy'].forEach((k, i) => (dict[`res.${id}.${k}`] = v[i]));

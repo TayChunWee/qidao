@@ -16,6 +16,14 @@ const QUALITY = [
   { scale: 0.5, shadow: 1024, gap: 30 },
 ];
 
+// 玩家在设置里选的画质。'auto'：跟着帧率在上面几档之间自动调；其余三样固定在某一档不动
+export const QUALITY_MODES = ['auto', 'low', 'mid', 'high'];
+const FIXED = { high: 0, mid: 1, low: 3 };
+// 每一档下，雨雪这些画几成
+const FX = [1, 0.8, 0.65, 0.4, 0.3];
+// 每一档下，季节的打扮画得多细：2 全都有；1 少一些（没有冰凌和涟漪，花草稀一半）；0 只换颜色、屋顶和树有雪
+const DETAIL = [2, 1, 1, 0, 0];
+
 function snapHz(hz) {
   for (const c of COMMON_HZ) if (Math.abs(hz - c) / c < 0.06) return c;
   return Math.round(hz);
@@ -27,6 +35,7 @@ export class Pacer {
     this.cap = 144; // 帧率上限
     this.hz = 0; // 屏幕刷新率（估计）。0 表示还没量出来
     this.q = 0; // 现在用的画质档位
+    this.mode = 'auto'; // 玩家选的画质
     this.fps = 0; // 最近一秒实际画了多少帧
     this.dt = 16; // 这一帧离上一帧多少毫秒
     this.active = false; // 标题画面上不调画质
@@ -74,10 +83,19 @@ export class Pacer {
     this.hold = 0;
   }
 
+  setMode(mode) {
+    this.mode = QUALITY_MODES.includes(mode) ? mode : 'auto';
+    this.retarget();
+    this.setQ(this.mode === 'auto' ? 0 : FIXED[this.mode]);
+    if (this.onStats) this.onStats(this.stats);
+  }
+
   setQ(q) {
     this.q = q;
     const k = QUALITY[q];
     this.view.setQuality(k.scale, k.shadow, k.gap);
+    this.view.fx = FX[q];
+    this.view.setDetail(DETAIL[q]);
     this.dirty = true; // 切换那一下会卡一帧，这一秒不算数
   }
 
@@ -161,7 +179,7 @@ export class Pacer {
 
   // avg：这一秒里平均多少毫秒一帧
   adapt(now, avg) {
-    if (now < this.hold || !this.hz) return;
+    if (this.mode !== 'auto' || now < this.hold || !this.hz) return;
     const target = 1000 / Math.min(this.cap, this.hz);
     if (avg > target * 1.08) {
       this.good = 0;

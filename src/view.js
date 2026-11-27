@@ -1,10 +1,21 @@
 // 3D 场景：镜头、灯光与昼夜、零件的增删动画、摆放虚影、粒子、拾取。
 import * as THREE from './vendor/three.module.min.js';
-import { SIZE, H, C, DIRS, DIR_RY, opp } from './config.js';
-import { buildPart, buildTerrain, buildZoneLand, buildZoneCells, buildZoneSand, mats } from './models.js';
+import { SIZE, H, C, DIRS, DIR_RY, opp, SEASON_COLORS, SEASON_LIGHT } from './config.js';
+import { buildPart, buildTerrain, buildZoneLand, buildZoneCells, buildZoneSand, buildScatter, resetLandCache, mats, SCENE, sceneStamp } from './models.js';
 import { MAX_STAGE, START_CENTER } from './world.js';
 import { describeCell, ghostParts } from './viewmodel.js';
 import { Anim, ease } from './anim.js';
+import { Weather } from './weather.js';
+
+// 跟着季节变色的东西：换季时这些零件要重画，别的不用动
+const SEASONAL = new Set(['tree', 'garden', 'field']);
+// 会积雪、会落上树叶的东西：雪厚了一档、换了季节或换了画质时重画
+const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail']);
+const SEASON_KEYS = [...new Set(SEASON_COLORS.flatMap((s) => Object.keys(s)))];
+const SUMMER = Object.fromEntries(SEASON_KEYS.map((k) => [k, C[k]])); // C 里原本的颜色
+const OVERCAST = new THREE.Color('#b9c2cc'); // 下雨下雪时天色往这个灰里靠
+const _a = new THREE.Color();
+const _b = new THREE.Color();
 
 const ELEV = THREE.MathUtils.degToRad(34);
 const CAM_DIST = 60;
@@ -149,16 +160,39 @@ export class View {
     this.sun = new THREE.DirectionalLight('#ffffff', 3);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
-    const sc = this.sun.shadow.camera;
-    sc.near = 1;
-    sc.far = 90;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
+    this.shadowBox = { x: 0, z: 0, half: 12 }; // 阴影要盖住的那块地面：中心和半边长
+    this.steadyShadows();
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
 
     this.anim = new Anim();
     this.particles = new Particles(this.scene);
+    this.weather = new Weather(this.scene);
+    this.fx = 1; // 画质允许天气的粒子画几成，由 perf.js 调
+    this.wet = 0; // 天有多阴（0-1），下雨下雪时慢慢变阴
+    this.wetGoal = 0;
+    this.seasonStamp = '';
+    this.dressStamp = sceneStamp();
+    this.scatter = null; // 草地上的零碎：野花、草丛、落叶、雪堆
+    this.puddles = null; // 水洼
+    this.scatterKey = '';
+    this.puddle = 0; // 水洼显出来几成：雨下一阵子才有，停了慢慢干
+    this.raining = false;
+    this.lastCtx = null;
+    // 天气要知道的事：哪些树会落叶、画得多细、哪里是水面
+    this.env = {
+      trees: [],
+      detail: SCENE.detail,
+      isWater: (x, z) => {
+        const c = this.world && this.world.cell(Math.floor(x + HALF_SIZE), Math.floor(z + HALF_SIZE));
+        return !c || c.water;
+      },
+    };
+    this.seasonTint = new THREE.Color(1, 1, 1);
+    this.seasonBright = 1;
+    this.markerBase = 0.26;
     this.time = 0;
     this.night = 0;
     this.sunTheta = 0;
@@ -274,6 +308,7 @@ export class View {
   // ---------- 地形 ----------
 
   setWorld(world) {
+    this.world = world;
     if (this.terrain) {
       // 重新开始：把陆地和沙洲换成新世界的样子
       for (const m of [...this.zoneLand, ...this.zoneSand]) {
@@ -282,6 +317,7 @@ export class View {
         m.geometry.dispose();
       }
       for (const g of this.cellGroups) g.position.y = 0;
+      this.dropScatter();
     } else {
       this.terrain = buildTerrain(world);
       this.scene.add(this.terrain.base, this.terrain.sea);
@@ -325,6 +361,42 @@ export class View {
     }
   }
 
+  // 让影子不抖。
+  // three.js 原本的做法是把阴影贴图对着太阳拍：太阳一走，贴图的格子就跟着在地面上滑，
+  // 影子的边缘每一帧都落在不同的格子上，看上去就一直在抖。
+  // 这里改成贴图的格子钉在地面上不动（一格对着地面上固定的一小块），太阳的方向只体现为"越高的东西
+  // 影子偏得越远"：高度为 y 的一点，落在贴图上地面 (x - y·sx, z - y·sz) 的位置，深度就是它的高度。
+  // 这样地面上的影子只按它真正移动的速度挪，不再跟着格子一起闪。
+  steadyShadows() {
+    const sh = this.sun.shadow;
+    const cam = sh.camera;
+    const Y_TOP = 9; // 这个高度以上的东西不投影子
+    const Y_BOTTOM = -1.3;
+    sh.updateMatrices = (light) => {
+      // 贴图直接按世界坐标拍，不再有"镜头的位置和朝向"
+      cam.position.set(0, 0, 0);
+      cam.quaternion.identity();
+      cam.matrixWorld.identity();
+      cam.matrixWorldInverse.identity();
+      const ly = light.position.y - light.target.position.y;
+      const sx = (light.position.x - light.target.position.x) / ly;
+      const sz = (light.position.z - light.target.position.z) / ly;
+      const box = this.shadowBox;
+      const texel = (2 * box.half) / sh.mapSize.x;
+      // 太阳低的时候，高处的屋顶落在贴图上偏得远：把贴图朝那边挪一点。只按整格挪，格子对着的地面不变
+      const snap = (v) => Math.round(v / texel) * texel;
+      const cx = snap(box.x + Math.max(-2.5, Math.min(2.5, -sx * 1.5)));
+      const cz = snap(box.z + Math.max(-2.5, Math.min(2.5, -sz * 1.5)));
+      const a = 1 / box.half;
+      const yh = (Y_TOP - Y_BOTTOM) / 2;
+      const ym = (Y_TOP + Y_BOTTOM) / 2;
+      // 第二行取负号：保持和普通镜头一样的左右手关系，不然正反面会弄反
+      cam.projectionMatrix.set(a, -sx * a, 0, -cx * a, 0, sz * a, -a, cz * a, 0, -1 / yh, 0, ym / yh, 0, 0, 0, 1);
+      sh._frustum.setFromProjectionMatrix(cam.projectionMatrix);
+      sh.matrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(cam.projectionMatrix);
+    };
+  }
+
   // 把镜头和阴影范围对准小岛现在的大小
   frameStage(stage, instant = false) {
     const f = FRAMES[stage];
@@ -335,12 +407,26 @@ export class View {
       this.target.copy(this.targetGoal);
       this.zoom = f.zoom;
     }
-    const sc = this.sun.shadow.camera;
-    sc.left = -f.shadow;
-    sc.right = f.shadow;
-    sc.top = f.shadow;
-    sc.bottom = -f.shadow;
-    sc.updateProjectionMatrix();
+    // 阴影只要盖住已经长出来的陆地，外加一圈余量：范围越小，影子越清楚
+    let x0 = 1e9;
+    let x1 = -1e9;
+    let z0 = 1e9;
+    let z1 = -1e9;
+    if (this.world) {
+      for (let z = 0; z < SIZE; z++) {
+        for (let x = 0; x < SIZE; x++) {
+          const c = this.world.cell(x, z);
+          if (c.zone < 0 || c.zone > stage) continue;
+          x0 = Math.min(x0, x);
+          x1 = Math.max(x1, x + 1);
+          z0 = Math.min(z0, z);
+          z1 = Math.max(z1, z + 1);
+        }
+      }
+    }
+    if (x1 > x0) this.shadowBox = { x: (x0 + x1) / 2 - HALF_SIZE, z: (z0 + z1) / 2 - HALF_SIZE, half: Math.max(x1 - x0, z1 - z0) / 2 + 3 };
+    else this.shadowBox = { x: f.x, z: f.z, half: f.shadow };
+    this.shadowAt = -1e9;
     this.sun.target.position.set(f.x, 0, f.z);
   }
 
@@ -405,6 +491,7 @@ export class View {
         if (gen !== this.terrainGen || this.zoneLand[zone]) return;
         this.zoneLand[zone] = buildZoneLand(world, zone);
         this.scene.add(this.zoneLand[zone]);
+        this.refreshScatter(world);
       },
     });
     return last + 1.0;
@@ -432,6 +519,20 @@ export class View {
       this.shadowAt = -1e9;
     }
     this.shadowGap = shadowGap;
+  }
+
+  // 画得多细：0 只换颜色、屋顶和树有雪；1 再加地上的零碎和小物件上的雪；2 全都有（冰凌、涟漪、更密的花草）
+  setDetail(d) {
+    if (d === SCENE.detail) return;
+    SCENE.detail = d;
+    this.env.detail = d;
+    this.dressStamp = sceneStamp();
+    this.resync();
+  }
+
+  // 世界没变，只是画法变了：照上一次的样子重画一遍
+  resync() {
+    if (this.world && this.lastCtx && this.terrain) this.sync(this.world, this.lastCtx, 'instant');
   }
 
   resize() {
@@ -524,6 +625,13 @@ export class View {
     this.hemi.groundColor.lerpColors(a.gnd, b.gnd, k);
     this.hemi.intensity = lerp(a.hi, b.hi, k);
     this.scene.background.lerpColors(a.sea, b.sea, k);
+    // 季节给光染一点颜色；下雨下雪时阳光弱下去，天和海都灰一些
+    const w = this.wet;
+    this.sun.color.multiply(this.seasonTint);
+    this.hemi.color.multiply(this.seasonTint).lerp(OVERCAST, w * 0.3);
+    this.sun.intensity *= this.seasonBright * (1 - w * 0.4);
+    this.hemi.intensity *= this.seasonBright * (1 - w * 0.04);
+    this.scene.background.lerp(_a.copy(OVERCAST).multiplyScalar(0.3 + this.sun.intensity * 0.2), w * 0.28);
     if (this.terrain) this.terrain.seaMat.color.copy(this.scene.background);
 
     // 太阳从东(+x)到西(-x)，略偏南；夜里换成月亮
@@ -548,6 +656,80 @@ export class View {
     mats.forge.emissiveIntensity = 0.9 + Math.sin(this.time * 9) * 0.12 + Math.sin(this.time * 23) * 0.06;
   }
 
+  // ---------- 季节与天气 ----------
+
+  // 颜色从季节 from 变到季节 to，k 是变到哪一步了（0-1）。只改颜色表和陆地；
+  // 岛上的树、花园、菜地由随后的 sync 重画（它们的记号里带着 seasonStamp）
+  setSeason(from, to, k) {
+    for (const key of SEASON_KEYS) {
+      _a.set(SEASON_COLORS[from][key] || SUMMER[key]);
+      _b.set(SEASON_COLORS[to][key] || SUMMER[key]);
+      C[key] = `#${_a.lerp(_b, k).getHexString()}`;
+    }
+    const la = SEASON_LIGHT[from];
+    const lb = SEASON_LIGHT[to];
+    this.seasonTint.setRGB(lerp(la[0], lb[0], k), lerp(la[1], lb[1], k), lerp(la[2], lb[2], k));
+    this.seasonBright = lerp(la[3], lb[3], k);
+    this.seasonStamp = `${from}${to}${k}`;
+    // 积雪：入冬时分三档慢慢变厚，开春时慢慢化掉。树叶、花、落叶这些按离得近的那个季节算
+    SCENE.snow = to === 3 ? Math.round(k * 3) : from === 3 ? Math.round((1 - k) * 3) : 0;
+    SCENE.season = k >= 0.5 ? to : from;
+    this.dressStamp = sceneStamp();
+    resetLandCache();
+    if (!this.terrain) return;
+    // 已经长出来的陆地、还没长出来的沙洲，按新颜色重做。正在升起的那一片升完时自己会按新颜色合并
+    const swap = (list, build) => {
+      list.forEach((m, zone) => {
+        if (!m) return;
+        const y = m.position.y;
+        this.scene.remove(m);
+        m.geometry.dispose();
+        list[zone] = build(this.world, zone);
+        list[zone].position.y = y;
+        this.scene.add(list[zone]);
+      });
+    };
+    swap(this.zoneLand, buildZoneLand);
+    swap(this.zoneSand, buildZoneSand);
+  }
+
+  // rain：下不下雨；drift：天上飘什么（'snow' 雪、'leaf' 落叶、'petal' 花瓣、null）；overcast：天阴不阴
+  setWeather(rain, drift, overcast) {
+    this.weather.set(rain, drift);
+    this.wetGoal = overcast ? 1 : 0;
+    this.raining = rain;
+  }
+
+  dropScatter() {
+    for (const m of [this.scatter, this.puddles]) {
+      if (!m) continue;
+      this.scene.remove(m);
+      m.geometry.dispose();
+    }
+    this.scatter = null;
+    this.puddles = null;
+    this.scatterKey = '';
+  }
+
+  // 草地上的零碎跟着世界和季节走：哪格盖了东西、哪片陆地长出来了、季节和画质，有一样变了才重做
+  refreshScatter(world = this.world) {
+    if (!world || !this.terrain) return;
+    let key = `${this.dressStamp}/${this.seasonStamp}/`;
+    for (let zone = 0; zone <= MAX_STAGE; zone++) key += this.zoneLand[zone] ? 1 : 0;
+    for (const c of world.cells) key += c.g ? (c.g.t === 'tree' ? 't' : 'x') : c.s.length ? 'x' : '.';
+    if (key === this.scatterKey) return;
+    this.dropScatter();
+    this.scatterKey = key;
+    const { ground, puddles } = buildScatter(world, (zone) => !!this.zoneLand[zone]);
+    this.scatter = ground;
+    this.puddles = puddles;
+    if (ground) this.scene.add(ground);
+    if (puddles) {
+      puddles.visible = this.puddle > 0.1;
+      this.scene.add(puddles);
+    }
+  }
+
   // ---------- 零件同步 ----------
 
   // mode：'place' 玩家刚摆放或拆除；'bulk' 撤销、重做、重置；'init' 首次载入；'instant' 整块移动后直接换好
@@ -556,6 +738,8 @@ export class View {
     let order = 0;
     this.emitters = [];
     this.sprayers = [];
+    this.lastCtx = ctx;
+    const trees = [];
     for (let z = 0; z < SIZE; z++) {
       for (let x = 0; x < SIZE; x++) {
         const idx = z * SIZE + x;
@@ -566,7 +750,8 @@ export class View {
         for (const d of descs) {
           seen.add(d.key);
           const y = d.y || 0;
-          const sig = d.kind + JSON.stringify(d.p);
+          const sig = d.kind + JSON.stringify(d.p) + (SEASONAL.has(d.kind) ? this.seasonStamp : '') + (DRESSED.has(d.kind) ? this.dressStamp : '');
+          if (d.kind === 'tree' && d.p.seed % 2 === 0) trees.push([group.position.x, group.position.z]);
           const cur = map.get(d.key);
           if (cur && cur.sig === sig) {
             if (Math.abs(cur.y - y) > 1e-4) {
@@ -578,6 +763,7 @@ export class View {
           }
           const obj = buildPart(d.kind, d.p);
           obj.position.y = y;
+          obj.userData.phase = (x * 2.399 + z * 3.883) % 6.28; // 摇摆的节拍按位置定：换季重画时树不会突然抖一下
           group.add(obj);
           const rec = { obj, sig, y, kind: d.kind };
           map.set(d.key, rec);
@@ -605,6 +791,8 @@ export class View {
         }
       }
     }
+    this.env.trees = trees;
+    this.refreshScatter(world);
     this.rebuildPicks(world);
     return { grown };
   }
@@ -625,7 +813,7 @@ export class View {
 
   track(obj) {
     if (obj.userData.sway) {
-      obj.userData.phase = Math.random() * 6.28;
+      if (obj.userData.phase === undefined) obj.userData.phase = Math.random() * 6.28;
       this.swayers.add(obj);
     }
     for (const c of obj.children) {
@@ -988,7 +1176,19 @@ export class View {
       this.ghostFresh = true;
       this.hl.visible = false;
       this.marker.visible = h.valid;
-      if (h.kind === 'removeBalcony') {
+      // 拆除是红框；粉刷时框是要刷上去的那种颜色
+      const tint = h.kind === 'paint';
+      this.marker.material.color.set(tint ? (h.brush === 'wall' ? C.wallPaint : C.roofPaint)[h.color] : '#ff7a66');
+      this.markerBase = tint ? 0.58 : 0.26;
+      if (tint) {
+        if (h.brush === 'roof') {
+          this.marker.position.set(cx, (h.level + 1) * H + 0.24, cz);
+          this.marker.scale.set(1.02, 0.5, 1.02);
+        } else {
+          this.marker.position.set(cx, h.level * H + H / 2, cz);
+          this.marker.scale.set(0.9, H * 0.94, 0.9);
+        }
+      } else if (h.kind === 'removeBalcony') {
         const d = h.dir;
         this.marker.position.set(cx + DIRS[d].x * 0.58, h.level * H + 0.12, cz + DIRS[d].z * 0.58);
         this.marker.scale.set(d % 2 ? 0.38 : 0.7, 0.36, d % 2 ? 0.7 : 0.38);
@@ -1038,6 +1238,16 @@ export class View {
     this.updateCamera(1 - Math.exp(-dt * 9));
     this.anim.update(dt);
     this.particles.update(dt);
+    // 天气：阴晴慢慢变；雨雪只落在镜头看得到的那一片
+    this.wet += Math.sign(this.wetGoal - this.wet) * Math.min(Math.abs(this.wetGoal - this.wet), dt / 8);
+    const span = this.viewH / this.zoom;
+    const reach = Math.min(30, Math.max(span / 2 / Math.sin(ELEV), (span * this.w) / this.h / 2) + 3);
+    this.weather.update(dt, this.target.x, this.target.z, reach, this.h / span, this.fx, this.night, this.env);
+    // 水洼：雨下了半分钟才显出来，雨停后慢慢干掉
+    const pg = this.raining ? 1 : 0;
+    this.puddle += Math.sign(pg - this.puddle) * Math.min(Math.abs(pg - this.puddle), dt / (pg ? 30 : 50));
+    mats.puddle.opacity = 0.5 * smooth(0.1, 1, this.puddle);
+    if (this.puddles) this.puddles.visible = this.puddle > 0.1;
 
     for (const o of this.swayers) {
       const ph = o.userData.phase;
@@ -1086,7 +1296,7 @@ export class View {
       this.hl.position.lerp(this.hlPos, k);
       this.hl.scale.setScalar(0.96 + Math.sin(this.time * 5) * 0.03);
     }
-    if (this.marker.visible) this.marker.material.opacity = 0.26 + Math.sin(this.time * 6) * 0.08;
+    if (this.marker.visible) this.marker.material.opacity = this.markerBase + Math.sin(this.time * 6) * 0.08;
     if (this.selGroup.visible) {
       const sk = 1 - Math.exp(-dt * 22);
       this.selOff.lerp(this.selGoal, sk);
@@ -1143,6 +1353,11 @@ export class View {
     const box = new THREE.Box3();
     const c = new THREE.Vector3();
     const s = new THREE.Vector3();
+    // 工具栏上的小图不跟着季节变：先换回夏天的颜色、去掉雪，画完再换回来
+    const keepScene = { ...SCENE };
+    const keepC = Object.fromEntries(SEASON_KEYS.map((k) => [k, C[k]]));
+    Object.assign(SCENE, { season: 1, snow: 0, detail: 0 });
+    Object.assign(C, SUMMER);
     for (const [id, parts] of Object.entries(specs)) {
       const grp = new THREE.Group();
       for (const d of parts) {
@@ -1170,6 +1385,8 @@ export class View {
         if (o.geometry && !o.userData.shared) o.geometry.dispose();
       });
     }
+    Object.assign(SCENE, keepScene);
+    Object.assign(C, keepC);
     r.dispose();
     r.forceContextLoss();
     return out;

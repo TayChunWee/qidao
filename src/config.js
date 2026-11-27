@@ -6,8 +6,9 @@ export const H = 0.62; // 每层高度
 export const BODY = 0.84; // 房间主体宽度
 export const HALF = BODY / 2;
 export const DAY_LENGTH = 600; // 一昼夜的秒数（十分钟）
+export const SEASON_DAYS = 3; // 一个季节几天。季节：0 春 1 夏 2 秋 3 冬
 // 版本：每次发布到线上时改成当天的日期。显示在"制作与鸣谢"里，也随玩家的反馈一起寄出
-export const VERSION = '2026-11-26';
+export const VERSION = '2026-11-27b';
 export const AUTHOR = 'ovob'; // 作者署名，显示在"制作与鸣谢"最上面
 
 // 方向：0 北(-z) 1 东(+x) 2 南(+z) 3 西(-x)
@@ -40,6 +41,10 @@ export const C = {
   soil: '#c7a678',
   sand: '#f0dfb2',
   rock: '#b9b3a8',
+  snow: '#f7fafc',
+  snowShade: '#dfe8f0',
+  ice: '#d3e7f0',
+  tuft: '#97c574', // 草地上的小草丛
 
   walls: ['#f7e8d0', '#f4dcc4', '#f1e3c6', '#f8e4d8', '#ece0c8'],
   wallShade: '#e3d0b2',
@@ -57,6 +62,10 @@ export const C = {
   terracotta: '#cf7a58',
 
   roofs: ['#dc7860', '#d26e58', '#c66452', '#7fa9a2', '#6f9c9c'],
+  // 粉刷的六种颜色：白、红、黄、绿、蓝、紫。墙用浅的一套，屋顶用深的一套。
+  // 白墙实际用上面 walls 里那几种深浅不一的米白，红顶用 roofs 里的前三种红
+  wallPaint: ['#f7e8d0', '#f0b6aa', '#f6dc98', '#cbe0b2', '#c0d8e8', '#dbcae8'],
+  roofPaint: ['#efe8d8', '#dc7860', '#e2b25c', '#8fb46e', '#78a6ae', '#a58cc4'],
   flatTop: '#e9dcc2',
   towerStone: '#ddd7cb',
   towerRoof: '#6f8fb2',
@@ -74,6 +83,7 @@ export const C = {
   leafA: '#84bd72',
   leafB: '#6fab66',
   leafC: '#97c980',
+  treeTop: '#97c980', // 阔叶树最顶上那一团：春天开花，秋天变黄
   pineA: '#62a070',
   pineB: '#71ad7b',
   trunk: '#9c7150',
@@ -107,8 +117,29 @@ export const C = {
   spark: '#ffe08a',
 };
 
+// 每个季节要换掉的颜色，没写的沿用 C 里原本的。夏天就是 C 原本的样子。
+// 冬天这里只管把草和树叶换成挂霜的浅色；屋顶和树上的积雪在 models.js 里另画
+export const SEASON_COLORS = [
+  { grassA: '#c0de92', grassB: '#b4d688', leafA: '#9ad086', leafB: '#86c47a', treeTop: '#f5bccb', gardenBed: '#a2d088', crop: '#a6d47c', tuft: '#a3d27e' },
+  {},
+  { grassA: '#d0cf8a', grassB: '#c6c580', leafA: '#e3a04c', leafB: '#d0703e', leafC: '#c9c070', treeTop: '#eec65c', pineA: '#5c9468', pineB: '#6aa173', gardenBed: '#aebf7a', crop: '#c2b862', tuft: '#c4b266' },
+  { grassA: '#e4ece0', grassB: '#dae4d6', leafA: '#e2ebe6', leafB: '#d0ded8', leafC: '#cfdcc8', treeTop: '#f3f7f5', pineA: '#7ba58e', pineB: '#9bbfaa', gardenBed: '#cbd8c4', crop: '#b9c6aa', tuft: '#b9b08a' },
+];
+// 各个季节的光：阳光和天光各乘上这个颜色，最后一个数是亮度的倍数。秋天偏金，冬天偏冷、暗一点
+export const SEASON_LIGHT = [
+  [1, 1, 0.98, 1],
+  [1.02, 1, 0.96, 1.04],
+  [1.05, 0.96, 0.86, 0.98],
+  [0.93, 0.97, 1.06, 0.93],
+];
+
+// 粉刷的颜色编号：0 白 1 红 2 黄 3 绿 4 蓝 5 紫。新盖的房间是白墙、红顶
+export const PAINTS = [0, 1, 2, 3, 4, 5];
+export const WALL_DEFAULT = 0;
+export const ROOF_DEFAULT = 1;
+
 // 模块的名字和说明都在 lang/ 的文字表里（name.<id>、desc.<id>、tab.<id>）
-export const TABS = [{ id: 'build' }, { id: 'ground' }];
+export const TABS = [{ id: 'build' }, { id: 'ground' }, { id: 'paint' }];
 
 // tab：在工具栏的哪一页；rot：摆放时 R 键是否有意义；paint：是否支持按住拖动连续摆放
 // 数字键 1-9 对应当前这一页里从左到右的模块
@@ -131,5 +162,9 @@ export const MODULES = [
   { id: 'field', tab: 'ground', paint: true },
   { id: 'pavilion', tab: 'ground' },
   { id: 'fountain', tab: 'ground' },
+  // 粉刷：六种墙色、六种顶色，各算一样工具，点哪栋刷哪栋。brush：刷墙还是刷屋顶；color：第几种颜色
+  ...PAINTS.map((c) => ({ id: `wall${c}`, tab: 'paint', paint: true, brush: 'wall', color: c })),
+  ...PAINTS.map((c) => ({ id: `roof${c}`, tab: 'paint', paint: true, brush: 'roof', color: c })),
 ];
-for (const tab of TABS) MODULES.filter((m) => m.tab === tab.id).forEach((m, i) => (m.key = String(i + 1)));
+// 一页里排在第十个以后的没有数字键
+for (const tab of TABS) MODULES.filter((m) => m.tab === tab.id).forEach((m, i) => (m.key = i < 9 ? String(i + 1) : ''));

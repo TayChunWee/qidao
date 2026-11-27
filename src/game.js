@@ -2,9 +2,9 @@
 import { FPS_CHOICES } from './perf.js';
 import { World, SOLIDS, SOLO, GROUNDS, START_CENTER } from './world.js';
 import { evaluateAll, canHouse, eligibleIds, makeBonus, bonusConflicts, ARCHETYPES, FIRST_RESIDENTS } from './wishes.js';
-import { MODULES, TABS, H, DAY_LENGTH, SIZE, MAX_LEVEL, VERSION } from './config.js';
+import { MODULES, TABS, H, DAY_LENGTH, SEASON_DAYS, SIZE, MAX_LEVEL, PAINTS, VERSION, hash } from './config.js';
 import { t, nameOf, descOf, getLang, setLang } from './i18n.js';
-import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf } from './progression.js';
+import { LEVELS, MAX_LV, prosperityOf, levelFor, stageFor, unlockedAt, unlockLevel, rewardsOf, expandUnlock } from './progression.js';
 import { thumbParts } from './viewmodel.js';
 import { Resident, arrivalCell, walkable } from './residents.js';
 import { UI } from './ui.js';
@@ -13,7 +13,15 @@ import { sendFeedback } from './feedback.js';
 import { encodeSave, decodeSave } from './savecode.js';
 
 const SAVE_KEY = 'qidao-save-v2';
-const SAVE_V = 3;
+const SAVE_V = 4; // 4：建筑有了墙色和顶色
+// 换季：新季节头一天开头的这一段（一天的几分之几，约一分钟）里，颜色从上一季一步步变过来
+const TURN = 0.1;
+const TURN_STEPS = 8;
+// 天气：一天分成几段，每段各自决定下不下；四个季节里每段下雨（冬天是下雪）的可能，百分之几
+const WX_SLOTS = 6;
+const WET_CHANCE = [22, 12, 20, 34];
+// 测试地址和本机上多出几样测试用的开关（换季节、换天气）
+const TEST_BUILD = typeof location !== 'undefined' && (location.pathname.includes('/beta/') || ['localhost', '127.0.0.1'].includes(location.hostname));
 
 // 玩家贴进来的存档可能是别人给的，也可能被改过：不照单全收，只把认识的内容一样样重新抄一遍，
 // 有一处看不懂就整份不要。返回的是可以直接存进浏览器的存档
@@ -32,10 +40,15 @@ function cleanSave(raw) {
     if (c[0] !== 0 && !GROUNDS.includes(c[0])) bad();
     const s = c[1].map((b) => {
       if (!Array.isArray(b) || !SOLIDS.includes(b[0]) || ![0, 1, 2, 3].includes(b[1]) || !/^[01]{4}$/.test(b[2])) bad();
-      return [b[0], b[1], b[2]];
+      if (b[3] === undefined || b[3] === 0) return [b[0], b[1], b[2]];
+      if (!PAINTS.includes(b[3])) bad();
+      return [b[0], b[1], b[2], b[3]];
     });
     if (s.length > 1 && s.some((b) => own(SOLO, b[0]))) bad();
-    return c[0] || s.length ? [c[0], s] : 0;
+    if (!c[0] && !s.length) return 0;
+    if (c[2] === undefined || !s.length) return [c[0], s];
+    if (!PAINTS.includes(c[2])) bad();
+    return [c[0], s, c[2]];
   });
   const seen = new Set();
   const roster = [];
@@ -45,11 +58,18 @@ function cleanSave(raw) {
     const b = r.bonus;
     let bonus = null;
     if (b && (b.k === 'friend' || b.k === 'avoid') && own(ARCHETYPES, b.id)) bonus = { k: b.k, id: b.id };
-    else if (b && b.k === 'near' && own(MODULES, b.type) && Number.isInteger(b.r) && b.r > 0 && b.r < 9) bonus = { k: 'near', type: b.type, r: b.r };
+    else if (b && b.k === 'near' && own(MOD, b.type) && Number.isInteger(b.r) && b.r > 0 && b.r < 9) bonus = { k: 'near', type: b.type, r: b.r };
+    else if (b && b.k === 'wall' && PAINTS.includes(b.c)) bonus = { k: 'wall', c: b.c };
     roster.push({ id: r.id, bonus, happy: Number.isFinite(r.happy) && r.happy > 0 ? Math.min(r.happy, 1e6) : 0 });
   }
-  const save = { v: SAVE_V, world: JSON.stringify(world), level: raw.level, t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0, roster, done: !!raw.done };
-  new World(stageFor(save.level)).load(save.world); // 真的摆一遍，摆不出来的也不要
+  const day = Number.isInteger(raw.day) && raw.day > 0 && raw.day < 1e7 ? raw.day : 0;
+  const save = { v: SAVE_V, world: JSON.stringify(world), level: raw.level, t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0, day, roster, done: !!raw.done };
+  const trial = new World(stageFor(save.level));
+  trial.load(save.world); // 真的摆一遍，摆不出来的也不要
+  if (!(raw.v >= 4)) {
+    trial.legacyRoofs(); // 没有颜色的旧存档：高楼的屋顶照原来的样子补上颜色
+    save.world = trial.serialize();
+  }
   return save;
 }
 const TAP_SLOP = 10; // 触屏上手指挪动不超过这么多像素，还算"点了一下"
@@ -87,6 +107,11 @@ export class Game {
     this.undoStack = [];
     this.redoStack = [];
     this.t = 0.1;
+    this.day = 0; // 过了几天。季节按它算
+    this.turnDay = -1; // 在哪一天换的季（只有玩着玩着自然换季才慢慢变色，读档和手动切换都是直接换好）
+    this.seasonKey = '';
+    this.wxKey = '';
+    this.wx = 'auto'; // 天气：'auto' 照常，'clear'、'wet' 是测试用的强制晴天、强制雨雪
     this.started = false;
     this.tiers = {};
     this.bonusDone = {};
@@ -120,7 +145,7 @@ export class Game {
     this.done = false;
 
     // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
-    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', tutorialDone: false, growthTipDone: false };
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', quality: 'auto', tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
@@ -186,6 +211,21 @@ export class Game {
         this.ui.setThemeMode(mode, true);
         this.saveSettings();
       },
+      setQuality: (mode) => {
+        this.settings.quality = mode;
+        this.applyQuality();
+        this.saveSettings();
+      },
+      // 测试用：直接跳到某个季节的第一天、强制晴天或雨雪
+      setSeason: (s) => {
+        this.day = Math.floor(this.day / (SEASON_DAYS * 4)) * SEASON_DAYS * 4 + s * SEASON_DAYS;
+        this.turnDay = -1;
+        this.queueSave();
+      },
+      setWx: (mode) => {
+        this.wx = mode;
+        this.ui.setTest(this.season, this.wx);
+      },
       reset: () => this.reset(),
       rotate: () => this.rotate(),
       aimConfirm: () => (this.tool === 'move' ? this.confirmMove() : this.confirmAim()),
@@ -205,6 +245,8 @@ export class Game {
     this.ui.setHand(this.settings.hand);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
+    this.applyQuality();
+    this.ui.showTest(TEST_BUILD);
 
     const save = this.loadSave();
     if (!save) {
@@ -226,6 +268,7 @@ export class Game {
     this.adoptResults();
     this.prosperity = prosperityOf(this.results);
     this.unlocked = unlockedAt(this.level);
+    this.refreshSeason(); // 先把季节的颜色定好，下面盖出来的陆地和树才是对的
     this.view.setWorld(this.world);
     this.view.sync(this.world, this.ctx(), 'init');
     this.ui.setThumbs(this.view.makeThumbs(Object.fromEntries(MODULES.map((m) => [m.id, thumbParts(m.id)]))));
@@ -280,10 +323,12 @@ export class Game {
       const level = Math.min(MAX_LV, Math.max(0, data.level | 0));
       const world = new World(stageFor(level));
       world.load(data.world);
+      if (!(data.v >= 4)) world.legacyRoofs(); // 没有颜色的旧存档：高楼的屋顶照原来的样子补上颜色
       this.world = world;
       this.level = level;
       this.done = !!data.done;
       if (typeof data.t === 'number') this.t = data.t;
+      if (Number.isInteger(data.day) && data.day >= 0) this.day = data.day;
       return data;
     } catch (e) {
       return null;
@@ -297,9 +342,46 @@ export class Game {
       world: this.world.serialize(),
       level: this.level,
       t: this.t,
+      day: this.day,
       roster: this.roster.map((r) => ({ id: r.spec.id, bonus: r.bonus, happy: r.happy })),
       done: this.done,
     };
+  }
+
+  // 画质：把玩家选的档位交给帧率那边；最低一档连界面的毛玻璃效果也关掉
+  applyQuality() {
+    this.pacer.setMode(this.settings.quality);
+    this.settings.quality = this.pacer.mode;
+    document.body.classList.toggle('lowfx', this.pacer.mode === 'low');
+    this.ui.setQuality(this.pacer.mode);
+  }
+
+  // 现在是哪个季节、下不下雨雪。每帧都来问一次，只有变了才真的去动画面
+  refreshSeason() {
+    const s = Math.floor(this.day / SEASON_DAYS) % 4;
+    const turning = this.turnDay === this.day && this.t < TURN;
+    const step = turning ? Math.floor((this.t / TURN) * TURN_STEPS) : TURN_STEPS;
+    const key = `${s}:${step}`;
+    if (key !== this.seasonKey) {
+      const first = !this.seasonKey;
+      this.seasonKey = key;
+      this.view.setSeason((s + 3) % 4, s, step / TURN_STEPS);
+      if (!first) this.view.sync(this.world, this.ctx(), 'instant');
+      if (s !== this.season) {
+        this.season = s;
+        this.ui.setSeason(s);
+        this.ui.setTest(s, this.wx);
+        if (!first && this.started) this.ui.toast(t('season.now', s), 3.2);
+      }
+    }
+    const slot = Math.floor(this.t * WX_SLOTS);
+    // 开局的头两段一定是晴天：第一眼看到的小岛是亮堂堂的
+    const wet = this.wx === 'auto' ? !(this.day === 0 && slot < 2) && hash(this.day, slot, 77) % 100 < WET_CHANCE[s] : this.wx === 'wet';
+    const wkey = `${s}:${wet}`;
+    if (wkey !== this.wxKey) {
+      this.wxKey = wkey;
+      this.view.setWeather(wet && s !== 3, wet && s === 3 ? 'snow' : s === 2 ? 'leaf' : s === 0 ? 'petal' : null, wet);
+    }
   }
 
   save() {
@@ -350,7 +432,7 @@ export class Game {
     return [
       `版本 ${VERSION}，语言 ${getLang()}`,
       `小岛 ${this.level + 1} 级，繁荣度 ${this.prosperity}，建造规模 ${this.world.count()}`,
-      `帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}，界面 ${this.settings.theme}，${this.ui.dock ? `单手版式 ${this.settings.hand}` : '非单手版式'}`,
+      `第 ${this.day + 1} 天，画质 ${this.settings.quality}，帧率上限 ${this.settings.fps}，音乐 ${this.settings.track}，界面 ${this.settings.theme}，${this.ui.dock ? `单手版式 ${this.settings.hand}` : '非单手版式'}`,
       `窗口 ${window.innerWidth}×${window.innerHeight}（像素比 ${window.devicePixelRatio}）`,
       navigator.userAgent,
     ].join('\n');
@@ -396,6 +478,8 @@ export class Game {
     this.bonusDone = {};
     this.level = 0;
     this.done = false;
+    this.day = 0;
+    this.turnDay = -1;
     this.unlocked = unlockedAt(0);
     this.arriveTimer = ARRIVE_DELAY;
     this.arriveList = null;
@@ -559,7 +643,7 @@ export class Game {
     const fresh = [];
     const lines = [];
     for (let lv = this.level + 1; lv <= target; lv++) {
-      fresh.push(...LEVELS[lv].unlock);
+      fresh.push(...expandUnlock(LEVELS[lv].unlock));
       lines.push(...rewardsOf(lv));
     }
     this.level = target;
@@ -627,7 +711,7 @@ export class Game {
     // 触屏上没有"鼠标移上去看说明"：选中的时候在按钮上方弹出说明和用法，几秒后自己淡出
     if (this.touch && this.started) {
       if (!this.tool) this.ui.hideTip();
-      else if (m) this.ui.showTip(id, descOf(id, true), t(m.paint ? 'aim.paint' : 'aim.tap'));
+      else if (m) this.ui.showTip(id, descOf(id, true), t(m.brush ? 'aim.brush' : m.paint ? 'aim.paint' : 'aim.tap'));
       else this.ui.showTip(id, '', t(id === 'move' ? 'aim.box' : 'aim.remove'));
     }
     this.refreshHover();
@@ -704,6 +788,14 @@ export class Game {
       return { kind: 'place', type: 'balcony', x, z, level, dir, rot: true, valid: r.ok, reason: r.reason };
     }
 
+    // 粉刷：刷墙时指着哪一层就刷哪一层，刷屋顶不管指着哪儿都是这栋楼的顶
+    const m = MOD[tool];
+    if (m && m.brush) {
+      const level = m.brush === 'roof' ? Math.max(0, c.s.length - 1) : pick.level;
+      const p = this.world.checkPaint(m.brush, x, z, level, m.color);
+      return { kind: 'paint', type: tool, brush: m.brush, color: m.color, x, z, level, valid: p.ok, reason: p.reason };
+    }
+
     const r = this.world.check(tool, x, z);
     const level = r.ok ? r.level : SOLIDS.includes(tool) ? Math.min(this.world.heightOf(c), 4) : 0;
     const dir = tool === 'dock' ? this.world.dockDir(x, z) : this.rot;
@@ -760,6 +852,7 @@ export class Game {
   // 预览旁边的一句话：放不了的原因，或者朝向、第几层
   hoverText(h) {
     if (!h.valid) return h.reason;
+    if (h.kind === 'paint') return h.brush === 'wall' && this.world.cell(h.x, h.z).s.length > 1 ? t('hint.floor', h.level + 1) : '';
     if (h.type === 'balcony') return `${t('hint.facing', h.dir)} · ${t('hint.floor', h.level + 1)}`;
     if (h.kind === 'place' && h.rot) return t('hint.facing', h.dir);
     if (h.kind === 'place' && h.level >= 1) return t('hint.floor', h.level + 1);
@@ -780,6 +873,7 @@ export class Game {
 
   applyTo(w, h) {
     if (h.kind === 'place') w.apply(h.type, h.x, h.z, { level: h.level, dir: h.dir });
+    else if (h.kind === 'paint') w.paint(h.brush, h.x, h.z, h.level, h.color);
     else if (h.kind === 'removeBalcony') w.removeBalcony(h.x, h.z, h.level, h.dir);
     else w.remove(h.x, h.z);
   }
@@ -800,6 +894,7 @@ export class Game {
     }
     this.applyTo(this.world, h);
     if (h.kind === 'place') this.audio.place(h.level, !SOLIDS.includes(h.type));
+    else if (h.kind === 'paint') this.audio.place(h.level, true);
     else this.audio.remove();
     this.commit('place');
     return true;
@@ -1447,7 +1542,16 @@ export class Game {
   // ---------- 每帧 ----------
 
   update(dt) {
-    if (this.started) this.t = (this.t + dt / DAY_LENGTH) % 1;
+    if (this.started) {
+      this.t += dt / DAY_LENGTH;
+      if (this.t >= 1) {
+        // 过了一天。正好赶上换季的话，记下来，颜色慢慢变过去
+        this.t %= 1;
+        this.day++;
+        if (this.day % SEASON_DAYS === 0) this.turnDay = this.day;
+      }
+    }
+    this.refreshSeason();
     this.view.setTime(this.t);
     const bright = 1 - this.view.night;
     if (Math.abs(bright - (this.lastBright ?? -1)) > 0.02) {
