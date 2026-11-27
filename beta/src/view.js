@@ -160,11 +160,10 @@ export class View {
     this.sun = new THREE.DirectionalLight('#ffffff', 3);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
-    const sc = this.sun.shadow.camera;
-    sc.near = 1;
-    sc.far = 90;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
+    this.shadowBox = { x: 0, z: 0, half: 12 }; // 阴影要盖住的那块地面：中心和半边长
+    this.steadyShadows();
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
 
@@ -362,6 +361,42 @@ export class View {
     }
   }
 
+  // 让影子不抖。
+  // three.js 原本的做法是把阴影贴图对着太阳拍：太阳一走，贴图的格子就跟着在地面上滑，
+  // 影子的边缘每一帧都落在不同的格子上，看上去就一直在抖。
+  // 这里改成贴图的格子钉在地面上不动（一格对着地面上固定的一小块），太阳的方向只体现为"越高的东西
+  // 影子偏得越远"：高度为 y 的一点，落在贴图上地面 (x - y·sx, z - y·sz) 的位置，深度就是它的高度。
+  // 这样地面上的影子只按它真正移动的速度挪，不再跟着格子一起闪。
+  steadyShadows() {
+    const sh = this.sun.shadow;
+    const cam = sh.camera;
+    const Y_TOP = 9; // 这个高度以上的东西不投影子
+    const Y_BOTTOM = -1.3;
+    sh.updateMatrices = (light) => {
+      // 贴图直接按世界坐标拍，不再有"镜头的位置和朝向"
+      cam.position.set(0, 0, 0);
+      cam.quaternion.identity();
+      cam.matrixWorld.identity();
+      cam.matrixWorldInverse.identity();
+      const ly = light.position.y - light.target.position.y;
+      const sx = (light.position.x - light.target.position.x) / ly;
+      const sz = (light.position.z - light.target.position.z) / ly;
+      const box = this.shadowBox;
+      const texel = (2 * box.half) / sh.mapSize.x;
+      // 太阳低的时候，高处的屋顶落在贴图上偏得远：把贴图朝那边挪一点。只按整格挪，格子对着的地面不变
+      const snap = (v) => Math.round(v / texel) * texel;
+      const cx = snap(box.x + Math.max(-2.5, Math.min(2.5, -sx * 1.5)));
+      const cz = snap(box.z + Math.max(-2.5, Math.min(2.5, -sz * 1.5)));
+      const a = 1 / box.half;
+      const yh = (Y_TOP - Y_BOTTOM) / 2;
+      const ym = (Y_TOP + Y_BOTTOM) / 2;
+      // 第二行取负号：保持和普通镜头一样的左右手关系，不然正反面会弄反
+      cam.projectionMatrix.set(a, -sx * a, 0, -cx * a, 0, sz * a, -a, cz * a, 0, -1 / yh, 0, ym / yh, 0, 0, 0, 1);
+      sh._frustum.setFromProjectionMatrix(cam.projectionMatrix);
+      sh.matrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(cam.projectionMatrix);
+    };
+  }
+
   // 把镜头和阴影范围对准小岛现在的大小
   frameStage(stage, instant = false) {
     const f = FRAMES[stage];
@@ -372,12 +407,26 @@ export class View {
       this.target.copy(this.targetGoal);
       this.zoom = f.zoom;
     }
-    const sc = this.sun.shadow.camera;
-    sc.left = -f.shadow;
-    sc.right = f.shadow;
-    sc.top = f.shadow;
-    sc.bottom = -f.shadow;
-    sc.updateProjectionMatrix();
+    // 阴影只要盖住已经长出来的陆地，外加一圈余量：范围越小，影子越清楚
+    let x0 = 1e9;
+    let x1 = -1e9;
+    let z0 = 1e9;
+    let z1 = -1e9;
+    if (this.world) {
+      for (let z = 0; z < SIZE; z++) {
+        for (let x = 0; x < SIZE; x++) {
+          const c = this.world.cell(x, z);
+          if (c.zone < 0 || c.zone > stage) continue;
+          x0 = Math.min(x0, x);
+          x1 = Math.max(x1, x + 1);
+          z0 = Math.min(z0, z);
+          z1 = Math.max(z1, z + 1);
+        }
+      }
+    }
+    if (x1 > x0) this.shadowBox = { x: (x0 + x1) / 2 - HALF_SIZE, z: (z0 + z1) / 2 - HALF_SIZE, half: Math.max(x1 - x0, z1 - z0) / 2 + 3 };
+    else this.shadowBox = { x: f.x, z: f.z, half: f.shadow };
+    this.shadowAt = -1e9;
     this.sun.target.position.set(f.x, 0, f.z);
   }
 
