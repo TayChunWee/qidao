@@ -181,6 +181,18 @@ export class UI {
 
     const bar = $('#tool-list');
     const acts = $('#acts');
+    this.toolBar = bar;
+    // 一排放不下的时候，滚轮上下滚也能把这一排左右挪
+    bar.addEventListener(
+      'wheel',
+      (e) => {
+        if (bar.scrollWidth <= bar.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        bar.scrollLeft += e.deltaY;
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      { passive: false },
+    );
     for (const m of MODULES) {
       const b = document.createElement('button');
       b.className = 'tool';
@@ -306,9 +318,17 @@ export class UI {
   }
 
   setTool(id) {
+    const bar = this.toolBar;
     for (const [k, el] of this.toolEls) {
       el.classList.toggle('on', k === id);
-      if (k === id) el.classList.remove('fresh');
+      if (k !== id) continue;
+      el.classList.remove('fresh');
+      // 用键盘选中的模块如果滚到了外面，把它挪回来
+      if (bar.scrollWidth <= bar.clientWidth || !el.offsetParent) continue;
+      const r = el.getBoundingClientRect();
+      const br = bar.getBoundingClientRect();
+      if (r.left < br.left) bar.scrollLeft -= br.left - r.left + 8;
+      else if (r.right > br.right) bar.scrollLeft += r.right - br.right + 8;
     }
   }
 

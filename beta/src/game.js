@@ -12,8 +12,13 @@ import { TRACKS } from './music.js';
 import { sendFeedback } from './feedback.js';
 import { encodeSave, decodeSave } from './savecode.js';
 
-const SAVE_KEY = 'qidao-save-v2';
-const SAVE_V = 4; // 4：建筑有了墙色和顶色
+// 测试版用自己的一份存档：里面可能有正式版还不认识的新东西，混着用会把正式版那份弄乱。
+// 第一次打开测试版时，从正式版那份抄一份过来接着玩
+const MAIN_SAVE_KEY = 'qidao-save-v2';
+const BETA = typeof location !== 'undefined' && location.pathname.includes('/beta/');
+const SAVE_KEY = BETA ? 'qidao-save-beta' : MAIN_SAVE_KEY;
+const BETA_MARK = 'qidao-save-beta-init';
+const SAVE_V = 5; // 4：建筑有了墙色和顶色；5：有了小桥、露台、水上小屋这些新组件，旧版本读不了
 // 换季：新季节头一天开头的这一段（一天的几分之几，约一分钟）里，颜色从上一季一步步变过来
 const TURN = 0.1;
 const TURN_STEPS = 8;
@@ -45,6 +50,8 @@ function cleanSave(raw) {
       return [b[0], b[1], b[2], b[3]];
     });
     if (s.length > 1 && s.some((b) => own(SOLO, b[0]))) bad();
+    // 露台只能是最上面一层，底下得是房间
+    if (s.some((b, i) => b[0] === 'terrace' && (i !== s.length - 1 || i < 1 || s[i - 1][0] !== 'room'))) bad();
     if (!c[0] && !s.length) return 0;
     if (c[2] === undefined || !s.length) return [c[0], s];
     if (!PAINTS.includes(c[2])) bad();
@@ -316,6 +323,11 @@ export class Game {
 
   loadSave() {
     try {
+      if (BETA && !localStorage.getItem(BETA_MARK)) {
+        const main = localStorage.getItem(MAIN_SAVE_KEY);
+        if (main && !localStorage.getItem(SAVE_KEY)) localStorage.setItem(SAVE_KEY, main);
+        localStorage.setItem(BETA_MARK, '1');
+      }
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
@@ -765,6 +777,8 @@ export class Game {
     if (tool === 'remove') {
       if (pick.balcony) return { kind: 'removeBalcony', x, z, level: pick.balcony.level, dir: pick.balcony.dir, valid: true };
       if (c.s.length) return { kind: 'remove', x, z, level: c.s.length - 1, solid: true, tall: SOLO[c.s[0].t] || 1, valid: true };
+      // 拆了这一格，更外面的桥或水上小屋就悬空了：得先拆外面的
+      if (c.g && this.world.wouldStrand(x, z)) return { kind: 'remove', x, z, level: 0, valid: false, reason: t('why.strand') };
       if (c.g) return { kind: 'remove', x, z, level: 0, solid: false, valid: true };
       return { kind: 'remove', x, z, level: 0, valid: false, reason: t('hint.nothing') };
     }
@@ -798,7 +812,7 @@ export class Game {
 
     const r = this.world.check(tool, x, z);
     const level = r.ok ? r.level : SOLIDS.includes(tool) ? Math.min(this.world.heightOf(c), 4) : 0;
-    const dir = tool === 'dock' ? this.world.dockDir(x, z) : this.rot;
+    const dir = tool === 'dock' ? this.world.dockDir(x, z) : tool === 'stilt' ? this.world.shoreDir(x, z, true) : this.rot;
     return { kind: 'place', type: tool, x, z, level, dir, rot: !!MOD[tool].rot, valid: r.ok, reason: r.reason };
   }
 

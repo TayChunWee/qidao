@@ -426,6 +426,13 @@ export function buildPart(kind, p = {}) {
         g.box(0.14, 0.1, 0.14, 0.2, 0.085, -0.2, C.wood);
         g.box(0.1, 0.07, 0.1, 0.03, 0.085, -0.24, C.woodLight);
       }
+      if (p.t === 'library') {
+        // 书屋顶上的天窗，夜里透出光来
+        g.box(0.38, 0.06, 0.38, 0, 0.085, 0, C.frame);
+        glow.box(0.3, 0.025, 0.3, 0, 0.13, 0, '#fff');
+        g.box(0.38, 0.03, 0.025, 0, 0.14, 0, C.frame);
+        g.box(0.025, 0.03, 0.38, 0, 0.14, 0, C.frame);
+      }
       if (SCENE.snow) {
         g.box(0.82, 0.01 + 0.012 * SCENE.snow, 0.82, 0, 0.085, 0, C.snow);
         if (p.t === 'shop') {
@@ -875,6 +882,256 @@ export function buildPart(kind, p = {}) {
       disc.userData = { fx: true, shared: true };
       disc.renderOrder = 2;
       extras.push(disc);
+      break;
+    }
+
+    case 'library': {
+      ry = DIR_RY[p.d];
+      glowMat = mats.glow[0];
+      g.box(BODY, H, BODY, 0, 0, 0, C.libWall);
+      g.box(BODY + 0.04, 0.07, BODY + 0.04, 0, 0, 0, C.stoneDark);
+      g.box(BODY + 0.02, 0.03, BODY + 0.02, 0, H - 0.03, 0, C.frame);
+      // 正中的门，门上挂一块招牌：一本摊开的书
+      g.box(0.22, 0.42, 0.03, 0, 0, HALF, C.frame);
+      g.box(0.16, 0.38, 0.045, 0, 0, HALF, C.woodDark);
+      g.ball(0.014, 0.05, 0.19, HALF + 0.03, C.spark);
+      g.box(0.3, 0.03, 0.12, 0, 0, HALF + 0.06, C.stone);
+      g.box(0.26, 0.11, 0.025, 0, 0.46, HALF + 0.012, C.woodDark);
+      g.add(new THREE.BoxGeometry(0.08, 0.065, 0.01), C.frame, -0.038, 0.515, HALF + 0.034, 0.3);
+      g.add(new THREE.BoxGeometry(0.08, 0.065, 0.01), C.frame, 0.038, 0.515, HALF + 0.034, -0.3);
+      // 两边的高窗，看得见里面的书架
+      for (const sx of [-0.28, 0.28]) {
+        g.box(0.2, 0.38, 0.03, sx, 0.1, HALF, C.frame);
+        glow.box(0.15, 0.32, 0.036, sx, 0.13, HALF, '#fff');
+        for (let r = 0; r < 3; r++) {
+          g.box(0.15, 0.012, 0.046, sx, 0.13 + r * 0.105, HALF, C.woodDark);
+          for (let k = 0; k < 4; k++) {
+            const bh = 0.05 + ((k + r + (sx > 0 ? 1 : 0)) % 3) * 0.011;
+            g.box(0.024, bh, 0.044, sx - 0.051 + k * 0.034, 0.142 + r * 0.105, HALF, C.books[(k + r * 2 + (sx > 0 ? 3 : 0)) % 5]);
+          }
+        }
+      }
+      for (const sx of [-1, 1]) {
+        g.box(0.03, 0.28, 0.2, sx * HALF, 0.18, 0, C.frame);
+        glow.box(0.04, 0.22, 0.14, sx * HALF, 0.21, 0, '#fff');
+      }
+      break;
+    }
+
+    case 'terrace': {
+      const wc = wallColor(p.c, p.tone);
+      g.box(0.93, 0.05, 0.93, 0, 0, 0, C.trim);
+      g.box(0.8, 0.02, 0.8, 0, 0.05, 0, C.flatTop);
+      // 一圈矮墙
+      for (const s of [-1, 1]) {
+        g.box(0.9, 0.13, 0.05, 0, 0.05, s * 0.425, wc);
+        g.box(0.05, 0.13, 0.8, s * 0.425, 0.05, 0, wc);
+        g.box(0.93, 0.025, 0.08, 0, 0.18, s * 0.425, C.trim);
+        g.box(0.08, 0.025, 0.77, s * 0.425, 0.18, 0, C.trim);
+      }
+      // 花架：四根柱子，上面一排木条，一角爬着藤
+      for (const sx of [-0.33, 0.33]) {
+        for (const sz of [-0.33, 0.33]) g.box(0.04, 0.42, 0.04, sx, 0.07, sz, C.wood);
+        g.box(0.045, 0.035, 0.8, sx, 0.47, 0, C.woodDark);
+      }
+      for (let i = 0; i < 5; i++) g.box(0.82, 0.025, 0.04, 0, 0.505, -0.3 + i * 0.15, C.woodLight);
+      if (!SCENE.snow) {
+        g.ball(0.075, -0.3, 0.55, -0.27, C.leafA);
+        g.ball(0.06, -0.16, 0.555, -0.31, C.leafB);
+        g.ball(0.05, -0.33, 0.56, -0.12, C.leafC);
+      }
+      g.ball(0.05, -0.335, 0.4, -0.335, C.leafB);
+      // 小圆桌、两只凳子、一盆花
+      g.cyl(0.016, 0.022, 0.12, 6, 0.04, 0.07, 0.04, C.woodDark);
+      g.cyl(0.095, 0.095, 0.02, 8, 0.04, 0.19, 0.04, C.woodLight);
+      g.cyl(0.042, 0.042, 0.075, 8, -0.13, 0.07, 0.1, C.awningA);
+      g.cyl(0.042, 0.042, 0.075, 8, 0.18, 0.07, -0.08, C.canopyA);
+      g.cyl(0.05, 0.038, 0.075, 8, 0.27, 0.07, 0.27, C.terracotta);
+      g.ball(0.065, 0.27, 0.19, 0.27, SCENE.snow ? C.snow : C.flowers[(p.tone || 0) % 5]);
+      if (SCENE.snow) {
+        for (let i = 0; i < 5; i++) g.box(0.8, 0.01 + 0.006 * SCENE.snow, 0.05, 0, 0.53, -0.3 + i * 0.15, C.snow);
+        if (SCENE.detail) {
+          for (const s of [-1, 1]) {
+            g.box(0.91, 0.016, 0.07, 0, 0.205, s * 0.425, C.snow);
+            g.box(0.07, 0.016, 0.76, s * 0.425, 0.205, 0, C.snow);
+          }
+          g.cyl(0.085, 0.09, 0.014, 8, 0.04, 0.21, 0.04, C.snow);
+        }
+      }
+      break;
+    }
+
+    case 'bridge': {
+      const m = p.mask;
+      const along = (m & 10) !== 0 && (m & 5) === 0; // 只通东西向：桥板横着铺
+      // 桥面：中间一块，通向哪边就往哪边伸出去
+      for (let i = 0; i < 4; i++) {
+        const o = -0.225 + i * 0.15;
+        g.box(along ? 0.15 : 0.6, 0.04, along ? 0.6 : 0.15, along ? o : 0, -0.005, along ? 0 : o, i % 2 ? C.wood : C.woodLight);
+      }
+      for (let d = 0; d < 4; d++) {
+        const ex = DIRS[d].x;
+        const ez = DIRS[d].z;
+        if ((m >> d) & 1) {
+          g.box(ex ? 0.2 : 0.6, 0.04, ex ? 0.6 : 0.2, ex * 0.4, -0.005, ez * 0.4, C.wood);
+          // 伸出去的那一截两边各一小段栏杆
+          for (const s of [-1, 1]) {
+            g.box(ex ? 0.2 : 0.03, 0.03, ex ? 0.03 : 0.2, ex ? ex * 0.4 : s * 0.3, 0.17, ez ? ez * 0.4 : s * 0.3, C.woodLight);
+            if (SCENE.snow && SCENE.detail) g.box(ex ? 0.2 : 0.042, 0.016, ex ? 0.042 : 0.2, ex ? ex * 0.4 : s * 0.3, 0.2, ez ? ez * 0.4 : s * 0.3, C.snow);
+          }
+        } else {
+          // 不通的一边装栏杆
+          g.box(ex ? 0.03 : 0.6, 0.03, ex ? 0.6 : 0.03, ex * 0.3, 0.17, ez * 0.3, C.woodLight);
+          g.box(ex ? 0.025 : 0.6, 0.025, ex ? 0.6 : 0.025, ex * 0.3, 0.09, ez * 0.3, C.wood);
+          if (SCENE.snow && SCENE.detail) g.box(ex ? 0.042 : 0.6, 0.016, ex ? 0.6 : 0.042, ex * 0.3, 0.2, ez * 0.3, C.snow);
+        }
+      }
+      for (const sx of [-0.3, 0.3]) {
+        for (const sz of [-0.3, 0.3]) {
+          g.box(0.05, 0.22, 0.05, sx, 0.02, sz, C.woodDark);
+          g.box(0.065, 0.02, 0.065, sx, 0.24, sz, SCENE.snow && SCENE.detail ? C.snow : C.wood);
+          // 石头桥墩，扎到水底
+          g.cyl(0.07, 0.085, 0.47, 6, sx * 0.8, -0.47, sz * 0.8, C.stoneDark);
+        }
+      }
+      break;
+    }
+
+    case 'orchard': {
+      const s = p.seed;
+      const sn = SCENE.snow;
+      // 树下一圈翻过的土
+      g.cyl(0.3, 0.33, 0.03, 8, 0, 0, 0, C.fieldSoil, Math.PI / 8);
+      if (sn) {
+        // 冬天：叶子落光，矮矮的枝杈上压着雪
+        g.cyl(0.27, 0.3, 0.008 + 0.006 * sn, 8, 0, 0.03, 0, C.snow, Math.PI / 8);
+        g.cyl(0.045, 0.065, 0.3, 6, 0, 0, 0, C.trunk);
+        for (let k = 0; k < 4; k++) {
+          const a = k * 1.571 + rand01(s, k, 3) * 0.7;
+          const tilt = 0.85 + rand01(s, k, 4) * 0.3;
+          const len = 0.25 + rand01(s, k, 5) * 0.08;
+          const y0 = 0.24 + (k % 2) * 0.05;
+          g.add(new THREE.BoxGeometry(0.03, len, 0.03).translate(0, len / 2, 0), C.trunk, 0, y0, 0, a, 0, tilt);
+          const tx = -Math.sin(tilt) * len * Math.cos(a);
+          const tz = Math.sin(tilt) * len * Math.sin(a);
+          const ty = y0 + Math.cos(tilt) * len;
+          g.ball(0.03 + 0.012 * sn, tx, ty + 0.012, tz, C.snow);
+          g.ball(0.024 + 0.008 * sn, tx * 0.5, y0 + (ty - y0) * 0.5 + 0.025, tz * 0.5, C.snow);
+          g.add(new THREE.BoxGeometry(0.02, 0.13, 0.02).translate(0, 0.065, 0), C.trunk, tx * 0.6, y0 + (ty - y0) * 0.6, tz * 0.6, a + 1.2, 0, tilt * 0.4);
+        }
+        g.ball(0.045 + 0.012 * sn, 0, 0.32, 0, C.snow);
+      } else {
+        // 矮而宽的树冠
+        const leaf = C.orchardLeaf[SCENE.season];
+        g.cyl(0.045, 0.065, 0.24, 6, 0, 0, 0, C.trunk);
+        g.ball(0.25, 0, 0.42, 0, leaf[1], 1);
+        g.ball(0.19, 0.18, 0.4, 0.05, leaf[0], 1);
+        g.ball(0.18, -0.16, 0.41, -0.09, leaf[0], 1);
+        g.ball(0.17, 0.0, 0.4, 0.18, leaf[2], 1);
+        g.ball(0.16, 0.02, 0.56, -0.03, leaf[2], 1);
+        // 春天开花，夏天挂青果，秋天果子红了
+        const season = SCENE.season;
+        const count = season === 0 ? 11 : season === 1 ? 7 : 10;
+        const size = season === 0 ? 0.036 : season === 1 ? 0.03 : 0.044;
+        for (let k = 0; k < count; k++) {
+          const a = k * 2.4 + rand01(s, k, 6) * 0.6;
+          const up = -0.25 + rand01(s, k, 7) * 1.15;
+          const col = season === 0 ? LITTER[0][k % 3] : C.fruit[season];
+          g.ball(size, Math.cos(a) * Math.cos(up) * 0.31, 0.43 + Math.sin(up) * 0.26, Math.sin(a) * Math.cos(up) * 0.31, col);
+        }
+        // 靠在树上的梯子
+        for (const sx of [-0.045, 0.045]) g.add(new THREE.BoxGeometry(0.016, 0.36, 0.016).translate(0, 0.18, 0), C.woodLight, 0.2 + sx, 0.03, 0.27, 0, -0.42);
+        for (let i = 0; i < 3; i++) g.box(0.09, 0.014, 0.014, 0.2, 0.1 + i * 0.09, 0.235 - i * 0.04, C.woodLight);
+        if (season === 2) {
+          // 秋天：树下一筐刚摘的果子，地上落了两个
+          g.box(0.15, 0.08, 0.12, -0.27, 0.03, 0.24, C.wood);
+          for (let i = 0; i < 3; i++) g.ball(0.04, -0.31 + i * 0.04, 0.125, 0.24 + (i % 2) * 0.03, C.fruit[2]);
+          g.ball(0.036, 0.1, 0.05, -0.27, C.fruit[2]);
+          g.ball(0.036, -0.2, 0.05, -0.18, C.fruit[2]);
+        }
+      }
+      data.sway = true;
+      break;
+    }
+
+    case 'stilt': {
+      // 水上小屋：正面（+z）朝着岸
+      ry = DIR_RY[p.d];
+      glowMat = mats.glow[2];
+      for (const sx of [-0.37, 0.37]) {
+        for (const sz of [-0.37, 0.37]) g.cyl(0.035, 0.035, 0.5, 6, sx, -0.47, sz, C.woodDark);
+      }
+      for (let i = 0; i < 6; i++) g.box(0.9, 0.035, 0.15, 0, -0.005, -0.375 + i * 0.15, i % 2 ? C.wood : C.woodLight);
+      g.box(0.3, 0.03, 0.14, 0, -0.008, 0.5, C.wood);
+      // 屋子靠后，前面留一条廊
+      g.box(0.66, 0.36, 0.52, 0, 0.03, -0.12, C.woodLight);
+      g.box(0.675, 0.014, 0.535, 0, 0.14, -0.12, C.wood);
+      g.box(0.675, 0.014, 0.535, 0, 0.26, -0.12, C.wood);
+      const fz = 0.14;
+      g.box(0.2, 0.31, 0.03, -0.13, 0.03, fz, C.frame);
+      g.box(0.15, 0.28, 0.045, -0.13, 0.03, fz, C.doorShop);
+      g.ball(0.013, -0.08, 0.17, fz + 0.03, C.spark);
+      g.box(0.2, 0.17, 0.03, 0.17, 0.15, fz, C.frame);
+      glow.box(0.15, 0.12, 0.04, 0.17, 0.175, fz, '#fff');
+      for (const sx of [-1, 1]) {
+        g.box(0.03, 0.17, 0.22, sx * 0.33, 0.15, -0.12, C.frame);
+        glow.box(0.04, 0.12, 0.17, sx * 0.33, 0.175, -0.12, '#fff');
+      }
+      {
+        // 茅草顶
+        const y0 = 0.38;
+        const yr = 0.68;
+        const zc = -0.12;
+        const hw = 0.37;
+        const hx = 0.41;
+        const ctr = [0, y0 + 0.08, zc];
+        g.box(0.76, 0.02, 0.66, 0, y0 - 0.012, zc, C.woodDark);
+        for (const side of [-1, 1]) {
+          g.quad([-hx, y0, zc + side * hw], [-hx, yr, zc], [hx, yr, zc], [hx, y0, zc + side * hw], C.straw, ctr);
+          g.tri([side * hx, y0, zc - hw], [side * hx, y0, zc + hw], [side * hx, yr, zc], C.wheat, ctr);
+          if (SCENE.snow) {
+            const cover = 0.3 + 0.14 * SCENE.snow;
+            const zb = zc + side * hw * cover;
+            const yb = yr - (yr - y0) * cover + 0.014;
+            g.quad([-hx, yb, zb], [-hx, yr + 0.014, zc], [hx, yr + 0.014, zc], [hx, yb, zb], C.snow, ctr);
+          }
+        }
+        g.box(0.86, 0.03, 0.06, 0, yr - 0.02, zc, SCENE.snow ? C.snow : C.wheat);
+      }
+      // 廊上的木桶，屋后伸出去的鱼竿
+      g.cyl(0.055, 0.048, 0.1, 8, 0.31, 0.03, 0.33, C.wood);
+      g.cyl(0.047, 0.047, 0.012, 8, 0.31, 0.125, 0.33, SCENE.snow >= 2 ? C.ice : C.water);
+      g.add(new THREE.BoxGeometry(0.012, 0.52, 0.012).translate(0, 0.26, 0), C.woodDark, -0.38, 0.03, -0.4, 0, -0.95);
+      break;
+    }
+
+    case 'clock': {
+      glowMat = mats.lamp;
+      g.box(0.76, 0.06, 0.76, 0, 0, 0, C.stoneDark);
+      g.box(0.68, 0.5, 0.68, 0, 0.06, 0, C.towerStone);
+      g.box(0.72, 0.04, 0.72, 0, 0.56, 0, C.stoneDark);
+      g.box(0.56, 0.72, 0.56, 0, 0.6, 0, C.millWall);
+      g.box(0.66, 0.04, 0.66, 0, 1.32, 0, C.stoneDark);
+      g.box(0.6, 0.42, 0.6, 0, 1.36, 0, C.towerStone);
+      g.box(0.7, 0.04, 0.7, 0, 1.78, 0, C.stoneDark);
+      for (let d = 0; d < 4; d++) {
+        const ex = DIRS[d].x;
+        const ez = DIRS[d].z;
+        const r = DIR_RY[d];
+        // 塔身的窄窗
+        g.add(new THREE.BoxGeometry(0.12, 0.26, 0.02), C.frame, ex * 0.28, 0.98, ez * 0.28, r);
+        glow.add(new THREE.BoxGeometry(0.075, 0.21, 0.03), '#fff', ex * 0.28, 0.98, ez * 0.28, r);
+        // 四面的钟：金边、亮着的钟面、十点十分的两根针
+        g.add(new THREE.CylinderGeometry(0.185, 0.185, 0.02, 16), C.spark, ex * 0.3, 1.57, ez * 0.3, r, Math.PI / 2);
+        glow.add(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 16), '#fff', ex * 0.302, 1.57, ez * 0.302, r, Math.PI / 2);
+        g.add(new THREE.BoxGeometry(0.022, 0.085, 0.012).translate(0, 0.036, 0), C.metal, ex * 0.322, 1.57, ez * 0.322, r, 0, 1.05);
+        g.add(new THREE.BoxGeometry(0.016, 0.13, 0.012).translate(0, 0.058, 0), C.metal, ex * 0.322, 1.57, ez * 0.322, r, 0, -1.05);
+        g.add(new THREE.BoxGeometry(0.03, 0.03, 0.016), C.metal, ex * 0.322, 1.57, ez * 0.322, r);
+      }
+      g.cone(0.48, 0.44, 4, 0, 1.82, 0, C.slate, Math.PI / 4);
+      if (SCENE.snow) snowCap(g, 0.48, 0.44, 4, 1.82, Math.PI / 4);
+      g.cyl(0.008, 0.008, 0.1, 5, 0, 2.25, 0, C.metal);
+      g.ball(0.03, 0, 2.37, 0, C.spark);
       break;
     }
   }

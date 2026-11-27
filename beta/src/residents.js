@@ -9,12 +9,12 @@ const HALF_SIZE = SIZE / 2;
 const key = (x, z) => z * SIZE + x;
 
 // 可以踩上去的地面物件，以及踩上去时脚底的高度
-const WALK_Y = { road: 0.035, garden: 0.05, field: 0.075, pavilion: 0.06 };
+const WALK_Y = { road: 0.035, garden: 0.05, field: 0.075, pavilion: 0.06, bridge: 0.045 };
 
 export function walkable(w, x, z) {
   const c = w.cell(x, z);
   if (!c) return false;
-  if (c.water) return !!c.g && c.g.t === 'dock';
+  if (c.water) return !!c.g && (c.g.t === 'dock' || c.g.t === 'bridge');
   if (c.locked || c.s.length) return false;
   return !c.g || WALK_Y[c.g.t] !== undefined;
 }

@@ -26,6 +26,12 @@ const NAME = {
   greenhouse: 'Greenhouse',
   windmill: 'Windmill',
   lighthouse: 'Lighthouse',
+  bridge: 'Bridge',
+  orchard: 'Fruit tree',
+  library: 'Library',
+  terrace: 'Roof terrace',
+  stilt: 'Stilt house',
+  clock: 'Clock tower',
   paint: 'Paint',
 };
 const lower = (type) => NAME[type].toLowerCase();
@@ -49,6 +55,12 @@ const DESC = {
   field: 'Hold and drag to till a whole stretch.',
   pavilion: 'A little gazebo you can step into for a rest.',
   fountain: 'The sound of splashing water. Lots of people love it.',
+  bridge: 'Goes on water, touching land or another bridge. Residents walk across it like a path. Hold and drag to build a whole stretch.',
+  orchard: 'Blossoms in spring, bears fruit in autumn. Hold and drag to plant a row.',
+  library: 'Ground floor only; someone can live upstairs. Nice and quiet.',
+  terrace: 'Goes on top of a room in place of a roof. Nothing can be built on top.',
+  stilt: 'Built on water, touching land, a dock or a bridge. Someone can live in it.',
+  clock: 'Stands on its own, with nothing built on top. Very tall, and its faces light up at night.',
 };
 
 // Things mentioned in "new ideas", with an article
@@ -66,6 +78,10 @@ const NOUN = {
   greenhouse: 'a greenhouse',
   market: 'a market',
   lighthouse: 'a lighthouse',
+  bridge: 'a bridge',
+  orchard: 'a fruit tree',
+  library: 'a library',
+  clock: 'a clock tower',
 };
 
 // Residents: name, the wish on their card, what they say on arrival, when content, and when their secret wish comes true.
@@ -103,6 +119,15 @@ const RES = {
   mei: ['Auntie Plum', 'Wants a quiet room with a tree in view', "I'd like a quiet room where I can see a tree from the window.", 'So peaceful. If only the walls were red, like plum blossom.', 'Red walls against green trees, like plum blossom in bloom.'],
   zi: ['Violet', 'Wants the top floor under a roof that stands out', 'I want to live at the very top, under a roof that is a different color from the ones next door.', "You can spot my place right away! It'd be even better if the roof were purple. That's my favorite color.", 'A purple roof. The prettiest in the whole world!'],
   deng: ['Old Beacon', 'Wants to keep a lighthouse', "I've kept lighthouses all my life. Just give me a cottage right beside one.", "The light's on every night. With a dock nearby, I could watch the boats come home.", 'The boats follow the light home and tie up safe at the dock.'],
+  wan: ['Old Lane', 'Wants to live at the end of a path', "I'm slow on my feet and I don't want people going past my door all day. Let me live at the end of a path.", 'Nobody walks past my door. Peaceful. With a fruit tree nearby, I could pick something in autumn.', 'The path stops at my door and there is fruit on the tree. I want for nothing.'],
+  xin: ['Postie', 'Wants a room on a path that leads to a shop and a well', "I deliver the mail, so I'm on the paths all day. Give me a room by a path that leads to a shop and to a well.", 'I can get anywhere by path! If it ran all the way to a dock, I could pick up the mail from overseas too.', 'One clear path from the dock to my door. Not a single letter runs late.'],
+  qiao: ['Bridget', 'Wants to live where a bridge leads to the dock', 'I love bridges. Give me a cottage by a path, with a bridge nearby and a way to walk to the dock.', 'Over the bridge to the dock every day. Lovely. If my house were right on the water, I could see the bridge from my window.', "Home on the water, bridge in view. I'm not going anywhere."],
+  guo: ['Pippin', 'Wants a cottage beside a fruit tree', 'I grow fruit. Give me a cottage with a fruit tree right beside it.', 'Plenty of fruit this year! With a market nearby, I could sell it the moment it is picked.', "Picked, carried round the corner, and on a market stall. Couldn't be fresher."],
+  juan: ['Paige', 'Wants to live above a library', "I'd like to open a library and live right upstairs.", 'The whole place smells of books. With a gazebo nearby, I could read outdoors on fine days.', 'A chair in the gazebo and a book until dark.'],
+  wang: ['Vista', 'Wants a balcony that looks straight at a fountain', "I'd like a balcony where I can look up and see a fountain.", "I never tire of watching the fountain. If I could see a clock tower too, I'd know when to go in for dinner.", 'Watching the fountain, hearing the clock chime. The day goes by just right.'],
+  lu: ['Dewey', 'Wants a top-floor room with a roof terrace', "I'd like a room with a terrace on top, so I can take a chair up there on warm evenings.", 'The breeze on the terrace is lovely. A fountain down below would make summer even cooler.', 'Sitting on the terrace with the fountain splashing below. This is how summer should be.'],
+  ting: ['Marina', 'Wants to live in a house on the water', 'I want to live on the water, with the sound of it right under my feet.', 'I can hear the water lapping at the posts from my bed. A lighthouse shining at night would make it feel even safer.', 'The lighthouse beam sweeps across the water, round and round, and I sleep soundly.'],
+  zhong: ['Old Chime', 'Wants to live by the clock tower', 'I ring the bell. Give me a cottage right next to the clock tower, so I can go up on the hour.', 'When the bell rings, the whole island hears it. If a path ran from here to the market, nobody would be late on market day.', 'The chimes carry down the path to the market, and everyone opens on time.'],
 };
 
 const dict = {
@@ -288,6 +313,8 @@ const dict = {
   'desc.balcony.touch': 'Goes on the outer wall of a room on floor 2 or higher. Tap the wall you want it on, or use ↻ to change which way it faces.',
   'desc.road.touch': 'Tap to lay one tile at a time. Doors open toward paths.',
   'desc.field.touch': 'Tap to till one tile at a time.',
+  'desc.bridge.touch': 'Goes on water, touching land or another bridge. Residents walk across it like a path. Tap to build one tile at a time.',
+  'desc.orchard.touch': 'Blossoms in spring, bears fruit in autumn. Tap to plant one at a time.',
   'hint.box': 'Hold and drag to box off what to move',
   'hint.moveOrRotate': 'Drag to move · R to rotate',
   'res.oops': 'Whoa!',
@@ -298,7 +325,7 @@ const dict = {
   'why.dockOnWater': 'Docks go on water',
   'why.dockHere': "There's already a dock here",
   'why.dockByLand': 'A dock has to touch land',
-  'why.waterOnlyDock': 'This is water. Only a dock fits here',
+  'why.waterOnlyDock': "This is water. That can't go here",
   'why.hasBuilding': "There's already a building here",
   'why.hasSame': (type) => `There's already a ${lower(type)} here`,
   'why.removeFirst': (type) => `Remove the ${lower(type)} here first`,
@@ -321,6 +348,10 @@ const dict = {
   'why.moveWater': "It can't go on the water",
   'why.moveTaken': "There's already something there",
   'why.balconyWouldBlock': 'A balcony would end up blocked',
+  'why.onWater': (type) => `A ${lower(type)} has to sit on water`,
+  'why.byLand': (type) => (type === 'stilt' ? 'A stilt house has to touch land, a dock or a bridge' : 'A bridge has to touch land or another bridge'),
+  'why.terraceRoom': 'A roof terrace goes on top of a room',
+  'why.strand': 'Something farther out would be left stranded. Remove that first',
 
   // ---------- wishes: homes ----------
   'home.balcony': 'Needs a balcony',
@@ -329,6 +360,9 @@ const dict = {
   'home.tower': 'Needs a tower',
   'home.overShop': 'Needs a room above a shop',
   'home.overWorkshop': 'Needs a room above a workshop',
+  'home.overLibrary': 'Needs a room above a library',
+  'home.terrace': 'Needs a room with a roof terrace on top',
+  'home.stilt': 'Needs a stilt house',
   'need.taken': 'A suitable home is already taken, so build another',
   'say.taken': 'Someone already lives in the place I had my eye on.',
   'need.almost': 'Something still seems to be missing…',
@@ -393,6 +427,10 @@ const dict = {
   'c.fields.say': (n) => (n <= 2 ? 'I need two fields by the house to grow anything properly.' : 'One more field would be nice.'),
 
   // a few residents have their own way of saying the same condition
+  'c.deadEnd.need': 'Wants to live at the end of a path',
+  'c.deadEnd.say': "I'd like the path to stop at my door, not carry on somewhere else.",
+  'c.waterSides.need': (n) => `Wants open water on ${n} sides`,
+  'c.waterSides.say': "It's too crowded around the house. I'd like more sides facing open water.",
   's.tang.high': 'A bit higher would be nice. The view really opens up from floor 3.',
   's.lan.water': "The water's too far. I can't sleep without the sound of waves.",
   's.tie.water': "Smithing takes water. I'd like to be closer to the shore.",
@@ -424,6 +462,26 @@ const dict = {
   'n.di.fountain.say': "I'd like to play along with the sound of a fountain.",
   'n.deng.lighthouse.need': 'House has to be right next to a lighthouse',
   'n.deng.lighthouse.say': 'I need to live right by the lighthouse, to go up and light it at night.',
+  's.wang.high': 'A bit higher would be nice. The fountain looks best from floor 3 up.',
+  's.lu.tallest': 'A building nearby is taller than my terrace and blocks the breeze.',
+  'n.xin.shop.need': 'Wants the path at the door to lead to a shop',
+  'n.xin.shop.say': "I can't reach a shop by path. Is the path broken somewhere?",
+  'n.xin.well.need': 'Wants the path at the door to lead to a well',
+  'n.xin.well.say': "I can't reach a well by path. A drink on my rounds would be nice.",
+  'n.qiao.dock.need': 'Wants the path at the door to lead to a dock',
+  'n.qiao.dock.say': "I can't walk to a dock from here. Maybe it needs one more bridge?",
+  'n.qiao.bridge.need': 'Wants a bridge within 2 tiles',
+  'n.qiao.bridge.say': 'No bridge nearby. It feels like something is missing.',
+  'n.guo.one.need': 'House has to be right next to a fruit tree',
+  'n.guo.one.say': 'I grow fruit. How can there be no fruit tree by my house?',
+  'n.guo.two.need': 'Wants 2 fruit trees next to the house',
+  'n.guo.two.say': "One tree doesn't bear much. Plant another beside it.",
+  'n.guo.well.need': 'Wants a well within 2 tiles',
+  'n.guo.well.say': 'Fruit trees need plenty of water. A well nearby would help.',
+  'n.wang.fountain.need': 'Balcony has to face a fountain within 3 tiles, with nothing in the way',
+  'n.wang.fountain.say': "My balcony isn't facing a fountain, or a building is in the way.",
+  'n.zhong.clock.need': 'House has to be right next to a clock tower',
+  'n.zhong.clock.say': 'I need to live right by the clock tower, to go up and ring the bell on the hour.',
 
   // ---------- new ideas ----------
   'bonus.near.text': (type, r) => (r === 1 ? `Wants to be right next to ${NOUN[type]}` : `Wants ${NOUN[type]} within ${tiles(r)} of home`),

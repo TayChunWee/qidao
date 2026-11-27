@@ -606,6 +606,12 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
 @media (min-width: 701px) and (max-width: 820px) and (min-height: 501px) {
   :root { --wish-w: 196px; --wish-open: 250px; }
 }
+/* 组件多了以后，窄一点的窗口里一排放不下：模块那一段可以左右滚（滚轮、触摸板、手指都行），搬动、拆除那几个按钮留在原地 */
+@media (min-width: 701px) and (max-width: 900px) and (min-height: 501px) {
+  #tool-list { flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding: 8px 4px 3px; }
+  #tool-list::-webkit-scrollbar { display: none; }
+  .tool { flex: none; }
+}
 
 /* ---------- 触屏 ---------- */
 
