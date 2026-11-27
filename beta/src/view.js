@@ -1242,7 +1242,7 @@ export class View {
     this.wet += Math.sign(this.wetGoal - this.wet) * Math.min(Math.abs(this.wetGoal - this.wet), dt / 8);
     const span = this.viewH / this.zoom;
     const reach = Math.min(30, Math.max(span / 2 / Math.sin(ELEV), (span * this.w) / this.h / 2) + 3);
-    this.weather.update(dt, this.target.x, this.target.z, reach, this.renderer.domElement.height / span, this.fx, this.night, this.env);
+    this.weather.update(dt, this.target.x, this.target.z, reach, this.h / span, this.fx, this.night, this.env);
     // 水洼：雨下了半分钟才显出来，雨停后慢慢干掉
     const pg = this.raining ? 1 : 0;
     this.puddle += Math.sign(pg - this.puddle) * Math.min(Math.abs(pg - this.puddle), dt / (pg ? 30 : 50));

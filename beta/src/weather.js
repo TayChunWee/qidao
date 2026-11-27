@@ -11,9 +11,9 @@ const WIND = 0.9; // 往 +x 方向吹
 // 每种飘的东西：下落速度、横向摆动、点的大小（世界单位）、有哪些颜色。
 // 雪是漫天下的（share：最多用到几成的点）；落叶和花瓣只从树上落下来（fromTrees），一棵树同时只有一两片
 const DRIFT = {
-  snow: { fall: 1.2, sway: 0.5, wind: 0.25, size: 0.1, colors: ['#ffffff', '#f2f7fb', '#e6eef6'], share: 0.85 },
-  leaf: { fall: 0.3, sway: 0.26, wind: 0.2, size: 0.085, colors: ['#e3a04c', '#d0703e', '#eec65c', '#c9853c'], fromTrees: true },
-  petal: { fall: 0.24, sway: 0.22, wind: 0.18, size: 0.07, colors: ['#f7c6d2', '#fbe1e7', '#f3aebf'], fromTrees: true },
+  snow: { fall: 1.2, sway: 0.5, wind: 0.25, size: 0.12, colors: ['#ffffff', '#f2f7fb', '#e6eef6'], share: 0.85 },
+  leaf: { fall: 0.3, sway: 0.26, wind: 0.2, size: 0.1, colors: ['#e3a04c', '#d0703e', '#eec65c', '#c9853c'], fromTrees: true },
+  petal: { fall: 0.24, sway: 0.22, wind: 0.18, size: 0.085, colors: ['#f7c6d2', '#fbe1e7', '#f3aebf'], fromTrees: true },
 };
 
 const _m = new THREE.Matrix4();
@@ -120,7 +120,7 @@ export class Weather {
     this.driftFresh = false;
   }
 
-  // cx、cz：镜头对着哪里；r：画面里看得到的范围有多大；pxPerUnit：一个世界单位在屏幕上是几个像素；
+  // cx、cz：镜头对着哪里；r：画面里看得到的范围有多大；pxPerUnit：一个世界单位在屏幕上是几个像素（按网页的像素算，不是屏幕的物理像素：点的大小 three.js 会自己再乘上屏幕的像素密度）；
   // fx：画质允许画几成（0-1）；dim：天有多暗（夜里雨丝别太亮）；
   // env：{ trees: 会落叶的树 [[x, z], …], detail: 画得多细 0-2, isWater(x, z): 那里是不是水面 }
   update(dt, cx, cz, r, pxPerUnit, fx, dim, env) {
