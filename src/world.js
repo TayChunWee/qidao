@@ -3,12 +3,20 @@ import { SIZE, MAX_LEVEL, DIRS, opp, hash, WALL_DEFAULT, ROOF_DEFAULT } from './
 import { t } from './i18n.js';
 
 // 可以叠高的实体块；SOLO 是独立的一座，只能建在地面，上面不能再盖（值是它相当于几层楼高）
-export const STACKS = ['room', 'shop', 'workshop', 'tower'];
-export const SOLO = { windmill: 2, greenhouse: 1, market: 1, lighthouse: 3 };
+// 露台是盖在房间顶上的一层：上面不能再盖，这栋楼也就没有坡屋顶了
+export const STACKS = ['room', 'shop', 'workshop', 'tower', 'library', 'terrace'];
+export const SOLO = { windmill: 2, greenhouse: 1, market: 1, lighthouse: 3, stilt: 1, clock: 3 };
 export const SOLIDS = [...STACKS, ...Object.keys(SOLO)];
-export const GROUNDS = ['road', 'garden', 'tree', 'lamp', 'dock', 'well', 'field', 'pavilion', 'fountain'];
+export const GROUNDS = ['road', 'garden', 'tree', 'lamp', 'dock', 'well', 'field', 'pavilion', 'fountain', 'bridge', 'orchard'];
+// 建在水面上的东西：码头、小桥是地面物件，水上小屋是一座独立的建筑
+export const AFLOAT = ['dock', 'bridge', 'stilt'];
+// 能走的路：路和小桥。门朝着它开，"顺着路能走到哪儿"也按它算
+export const PATHS = ['road', 'bridge'];
 // 朝向固定、正面有门的底层建筑
-const FACED = ['shop', 'workshop', 'windmill', 'greenhouse', 'market'];
+const FACED = ['shop', 'workshop', 'windmill', 'greenhouse', 'market', 'library'];
+// 只能开在底层的
+const GROUND_FLOOR = ['shop', 'workshop', 'library'];
+const isPath = (c) => !!c && !!c.g && PATHS.includes(c.g.t);
 
 // 整张地图。数字：第几次扩张后长出来的陆地（0 是开局的小岛）；
 // 字母 a-d：属于第 0-3 片陆地的池塘或水湾，一直是水；点：海。
@@ -104,8 +112,17 @@ export class World {
 
     if (type === 'dock') {
       if (!c.water) return fail(t(c.locked ? 'why.sandbar' : 'why.dockOnWater'));
-      if (c.g) return fail(t('why.dockHere'));
+      if (c.s.length) return fail(t('why.hasBuilding'));
+      if (c.g) return fail(c.g.t === 'dock' ? t('why.dockHere') : t('why.removeFirst', c.g.t));
       if (this.dockDir(x, z) < 0) return fail(t('why.dockByLand'));
+      return ok({ level: 0 });
+    }
+    // 小桥和水上小屋：建在水面上，要挨着陆地、桥或码头
+    if (type === 'bridge' || type === 'stilt') {
+      if (!c.water) return fail(t(c.locked ? 'why.sandbar' : 'why.onWater', type));
+      if (c.s.length) return fail(type === 'stilt' ? t('why.hasSame', 'stilt') : t('why.hasBuilding'));
+      if (c.g) return fail(c.g.t === type ? t('why.hasSame', type) : t('why.removeFirst', c.g.t));
+      if (this.shoreDir(x, z, type === 'stilt') < 0) return fail(t('why.byLand', type));
       return ok({ level: 0 });
     }
     if (c.water) return fail(t('why.waterOnlyDock'));
@@ -121,9 +138,11 @@ export class World {
     if (c.g) return fail(t('why.removeFirst', c.g.t));
     const level = c.s.length;
     if (level && SOLO[c.s[0].t]) return fail(t('why.soloTop', c.s[0].t));
+    if (level && c.s[level - 1].t === 'terrace') return fail(t('why.soloTop', 'terrace'));
     if (level >= MAX_LEVEL) return fail(t('why.maxHeight'));
     if (SOLO[type] && level > 0) return fail(t('why.soloGround', type));
-    if ((type === 'shop' || type === 'workshop') && level > 0) return fail(t('why.groundFloor', type));
+    if (GROUND_FLOOR.includes(type) && level > 0) return fail(t('why.groundFloor', type));
+    if (type === 'terrace' && (level < 1 || c.s[level - 1].t !== 'room')) return fail(t('why.terraceRoom'));
     if (type === 'lighthouse' && !this.near(x, z, 1, (n) => n.water)) return fail(t('why.lighthouseWater'));
     const top = level + (SOLO[type] || 1);
     for (let d = 0; d < 4; d++) {
@@ -257,8 +276,9 @@ export class World {
       const src = this.cell(f.x, f.z);
       const d = this.cell(to.x, to.z);
       if (!d) return fail(t('why.moveOff'));
-      if (src.g && src.g.t === 'dock') {
-        if (!d.water) return fail(t('why.moveDockWater'));
+      const afloat = (src.g && AFLOAT.includes(src.g.t)) || (src.s[0] && AFLOAT.includes(src.s[0].t));
+      if (afloat) {
+        if (!d.water) return fail(src.g && src.g.t === 'dock' ? t('why.moveDockWater') : t('why.onWater', src.g ? src.g.t : src.s[0].t));
       } else if (d.water) {
         return fail(t('why.moveWater'));
       } else if (d.locked) {
@@ -314,7 +334,52 @@ export class World {
         }
       }
     }
+    return this.adrift();
+  }
+
+  // 水面上的桥和小屋有没有悬空的：桥要一格接一格连到陆地上，小屋要靠着陆地、码头或连着岸的桥。没有问题返回 null
+  adrift() {
+    const land = (n) => !!n && !n.water && !n.locked;
+    const sides = (x, z) => DIRS.map((d) => [x + d.x, z + d.z]);
+    const grounded = new Set();
+    const queue = [];
+    const reach = (x, z) => {
+      const k = z * SIZE + x;
+      const c = this.cell(x, z);
+      if (!c || !c.g || c.g.t !== 'bridge' || grounded.has(k)) return;
+      grounded.add(k);
+      queue.push(x, z);
+    };
+    for (let z = 0; z < SIZE; z++) {
+      for (let x = 0; x < SIZE; x++) {
+        if (sides(x, z).some(([nx, nz]) => land(this.cell(nx, nz)))) reach(x, z);
+      }
+    }
+    for (let i = 0; i < queue.length; i += 2) for (const [nx, nz] of sides(queue[i], queue[i + 1])) reach(nx, nz);
+    for (let z = 0; z < SIZE; z++) {
+      for (let x = 0; x < SIZE; x++) {
+        const c = this.cell(x, z);
+        if (c.g && c.g.t === 'bridge' && !grounded.has(z * SIZE + x)) return t('why.byLand', 'bridge');
+        if (!c.s.length || c.s[0].t !== 'stilt') continue;
+        const held = sides(x, z).some(([nx, nz]) => {
+          const n = this.cell(nx, nz);
+          return land(n) || (!!n && !!n.g && (n.g.t === 'dock' || grounded.has(nz * SIZE + nx)));
+        });
+        if (!held) return t('why.byLand', 'stilt');
+      }
+    }
     return null;
+  }
+
+  // 拆掉 (x, z) 上的桥或码头以后，会不会有别的桥、小屋悬在水面上
+  wouldStrand(x, z) {
+    const c = this.cell(x, z);
+    if (!c || !c.water || !c.g) return false;
+    const g = c.g;
+    c.g = null;
+    const bad = this.adrift();
+    c.g = g;
+    return !!bad;
   }
 
   // ---------- 自动生成规则用到的查询 ----------
@@ -338,12 +403,24 @@ export class World {
   doorDir(x, z) {
     const b = this.cell(x, z)?.s[0];
     if (!b) return -1;
+    if (b.t === 'stilt') return this.shoreDir(x, z, true);
     if (FACED.includes(b.t)) return b.d;
     for (const d of [2, 1, 3, 0]) {
-      const n = this.cell(x + DIRS[d].x, z + DIRS[d].z);
-      if (n && n.g && n.g.t === 'road') return d;
+      if (isPath(this.cell(x + DIRS[d].x, z + DIRS[d].z))) return d;
     }
     return -1;
+  }
+
+  // 水面上的小桥、水上小屋靠着哪一边：优先靠着路或桥，其次是陆地（withDock：码头也算）。四边都靠不上返回 -1
+  shoreDir(x, z, withDock = false) {
+    let best = -1;
+    for (const d of [2, 1, 3, 0]) {
+      const n = this.cell(x + DIRS[d].x, z + DIRS[d].z);
+      if (!n || n.locked) continue;
+      if (isPath(n)) return d;
+      if (best < 0 && (!n.water || (withDock && n.g && n.g.t === 'dock'))) best = d;
+    }
+    return best;
   }
 
   // 码头朝陆地的方向，优先接到路上
@@ -367,7 +444,7 @@ export class World {
       const n = this.cell(nx, nz);
       if (!n) continue;
       if (n.g) {
-        if (n.g.t === 'road') m |= 1 << d;
+        if (PATHS.includes(n.g.t)) m |= 1 << d;
         else if (n.g.t === 'dock' && this.dockDir(nx, nz) === opp(d)) m |= 1 << d;
       } else if (n.s.length && this.doorDir(nx, nz) === opp(d)) {
         m |= 1 << d;

@@ -8,7 +8,7 @@ export const HALF = BODY / 2;
 export const DAY_LENGTH = 600; // 一昼夜的秒数（十分钟）
 export const SEASON_DAYS = 3; // 一个季节几天。季节：0 春 1 夏 2 秋 3 冬
 // 版本：每次发布到线上时改成当天的日期。显示在"制作与鸣谢"里，也随玩家的反馈一起寄出
-export const VERSION = '2026-11-27b';
+export const VERSION = '2026-11-27e';
 export const AUTHOR = 'ovob'; // 作者署名，显示在"制作与鸣谢"最上面
 
 // 方向：0 北(-z) 1 东(+x) 2 南(+z) 3 西(-x)
@@ -115,6 +115,16 @@ export const C = {
   dust: '#f1e6d0',
   smoke: '#f6f3ec',
   spark: '#ffe08a',
+  libWall: '#8fb3bd', // 书屋的墙
+  books: ['#d9694f', '#e8b04c', '#5f8f8a', '#7d6fa8', '#f3ead6'],
+  slate: '#5f6b82', // 钟楼的顶
+  // 果树的叶子按季节另配：结果子的时候还是绿的，红果子才显得出来
+  orchardLeaf: [
+    ['#a5d68e', '#93c97f', '#b4dd9c'],
+    ['#7db56a', '#6fa962', '#8fc47a'],
+    ['#93b75c', '#84aa52', '#a9c267'],
+  ],
+  fruit: ['', '#d8e27c', '#e2553f'],
 };
 
 // 每个季节要换掉的颜色，没写的沿用 C 里原本的。夏天就是 C 原本的样子。
@@ -153,6 +163,10 @@ export const MODULES = [
   { id: 'greenhouse', tab: 'build', rot: true },
   { id: 'market', tab: 'build', rot: true },
   { id: 'lighthouse', tab: 'build' },
+  { id: 'library', tab: 'build', rot: true },
+  { id: 'terrace', tab: 'build' },
+  { id: 'stilt', tab: 'build' },
+  { id: 'clock', tab: 'build' },
   { id: 'road', tab: 'ground', paint: true },
   { id: 'garden', tab: 'ground', paint: true },
   { id: 'tree', tab: 'ground', paint: true },
@@ -162,6 +176,8 @@ export const MODULES = [
   { id: 'field', tab: 'ground', paint: true },
   { id: 'pavilion', tab: 'ground' },
   { id: 'fountain', tab: 'ground' },
+  { id: 'bridge', tab: 'ground', paint: true },
+  { id: 'orchard', tab: 'ground', paint: true },
   // 粉刷：六种墙色、六种顶色，各算一样工具，点哪栋刷哪栋。brush：刷墙还是刷屋顶；color：第几种颜色
   ...PAINTS.map((c) => ({ id: `wall${c}`, tab: 'paint', paint: true, brush: 'wall', color: c })),
   ...PAINTS.map((c) => ({ id: `roof${c}`, tab: 'paint', paint: true, brush: 'roof', color: c })),

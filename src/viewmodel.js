@@ -15,8 +15,18 @@ export function describeCell(w, x, z, ctx = {}) {
       // 路靠水的一侧自动长出栏杆
       for (let d = 0; d < 4; d++) {
         const n = w.cell(x + DIRS[d].x, z + DIRS[d].z);
-        if (n && n.water && !n.g) parts.push({ key: `rail${d}`, kind: 'rail', p: { d }, y: 0, anim: 'grow' });
+        if (n && n.water && !n.g && !n.s.length) parts.push({ key: `rail${d}`, kind: 'rail', p: { d }, y: 0, anim: 'grow' });
       }
+    } else if (t === 'bridge') {
+      // 小桥除了接路和别的桥，也接到挨着的陆地和码头上；剩下的几边装栏杆
+      let mask = w.roadMask(x, z);
+      for (let d = 0; d < 4; d++) {
+        const n = w.cell(x + DIRS[d].x, z + DIRS[d].z);
+        if (n && !n.locked && (!n.water || (n.g && n.g.t === 'dock'))) mask |= 1 << d;
+      }
+      parts.push({ key: 'g', kind: 'bridge', p: { mask }, y: 0, anim: 'drop', fall: true });
+    } else if (t === 'orchard') {
+      parts.push({ key: 'g', kind: 'orchard', p: { seed: hash(x, z) % 12 }, y: 0, anim: 'drop', fall: true });
     } else if (t === 'garden') {
       // 有居民在照看的花园会多出长椅等摆设
       const deco = (ctx.benches && ctx.benches.get(`${x},${z}`)) || 0;
@@ -46,15 +56,17 @@ export function describeCell(w, x, z, ctx = {}) {
   // 风车、温室、集市、灯塔：独立的一整座
   const solo = c.s[0].t;
   if (SOLO[solo]) {
-    parts.push({ key: 'b0', kind: solo, p: { d: c.s[0].d }, y: 0, anim: 'drop', fall: true });
-    if (solo === 'lighthouse' && door >= 0) parts.push({ key: `door${door}`, kind: 'door', p: { d: door, t: 'tower' }, y: 0, anim: 'grow' });
+    // 水上小屋的门朝着岸
+    parts.push({ key: 'b0', kind: solo, p: { d: solo === 'stilt' ? Math.max(0, door) : c.s[0].d }, y: 0, anim: 'drop', fall: true });
+    if ((solo === 'lighthouse' || solo === 'clock') && door >= 0) parts.push({ key: `door${door}`, kind: 'door', p: { d: door, t: 'tower' }, y: 0, anim: 'grow' });
     return parts;
   }
 
   for (let i = 0; i < n; i++) {
     const b = c.s[i];
     const y = i * H;
-    const body = b.t === 'room' ? { tone, c: b.c || 0 } : b.t === 'tower' ? { lv: i % 2 } : { d: b.d };
+    // 露台的矮墙跟着楼下那间房的墙色走
+    const body = b.t === 'room' ? { tone, c: b.c || 0 } : b.t === 'tower' ? { lv: i % 2 } : b.t === 'terrace' ? { tone, c: c.s[i - 1].c || 0 } : { d: b.d };
     parts.push({ key: `b${i}`, kind: b.t, p: body, y, anim: 'drop', fall: i === 0 });
 
     const g = hash(x, z, i) % 3; // 同一间房的窗户一起亮
@@ -91,6 +103,8 @@ export function describeCell(w, x, z, ctx = {}) {
     });
   } else if (top.t === 'tower') {
     parts.push({ key: 'roof', kind: 'cone', p: {}, y: n * H, anim: 'grow' });
+  } else if (top.t === 'terrace') {
+    // 露台自己就是顶，不再盖屋顶
   } else {
     parts.push({ key: 'roof', kind: 'flat', p: { t: top.t }, y: n * H, anim: 'grow' });
   }
@@ -170,7 +184,25 @@ export function thumbParts(id) {
     case 'greenhouse':
     case 'market':
     case 'lighthouse':
+    case 'stilt':
+    case 'clock':
       return [{ kind: id, p: { d: 2 } }];
+    case 'library':
+      return [
+        { kind: 'library', p: { d: 2 } },
+        { kind: 'flat', p: { t: 'library' }, y: H },
+      ];
+    case 'terrace':
+      return [
+        { kind: 'room', p: { tone: 0 } },
+        { kind: 'win', p: { d: 2, v: 0, g: 0 } },
+        { kind: 'win', p: { d: 3, v: 2, g: 0 } },
+        { kind: 'terrace', p: { tone: 0, c: 0 }, y: H },
+      ];
+    case 'bridge':
+      return [{ kind: 'bridge', p: { mask: 5 } }];
+    case 'orchard':
+      return [{ kind: 'orchard', p: { seed: 1 } }];
     default:
       return [];
   }
@@ -209,7 +241,16 @@ export function ghostParts(id) {
     case 'greenhouse':
     case 'market':
     case 'lighthouse':
+    case 'stilt':
+    case 'clock':
+    case 'library':
       return [{ kind: id, p: { d: 2 } }];
+    case 'terrace':
+      return [{ kind: 'terrace', p: { tone: 0, c: 0 } }];
+    case 'bridge':
+      return [{ kind: 'bridge', p: { mask: 5 } }];
+    case 'orchard':
+      return [{ kind: 'orchard', p: { seed: 1 } }];
     default:
       return [];
   }

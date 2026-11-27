@@ -337,7 +337,6 @@ export class UI {
     for (const m of MODULES) this.toolEls.get(m.id).hidden = m.tab !== id;
     // 换了一页：从头看起；这一页里有刚解锁的就直接滚到它那儿
     const bar = this.toolBar;
-    bar.classList.toggle('tab-paint', id === 'paint');
     this.barGoal = null;
     bar.scrollLeft = 0;
     this.revealFresh();

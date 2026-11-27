@@ -7,6 +7,7 @@
 // 每个住处只能住一位居民，按全岛居民加起来最满意的方式分配。
 // 住得满意的居民过一阵会冒出一个"新想法"（想离某样东西或某个人近一点），实现了繁荣度再加 1。
 import { SIZE, DIRS, PAINTS, ROOF_DEFAULT, WALL_DEFAULT } from './config.js';
+import { PATHS } from './world.js';
 import { t } from './i18n.js';
 
 export const FIRST_RESIDENTS = ['tang', 'mo'];
@@ -50,6 +51,35 @@ const sideRooms = (w, h) => {
   }
   return out;
 };
+const isPath = (c) => !!c && !!c.g && PATHS.includes(c.g.t);
+// 从 (x, z) 旁边的路出发，顺着路和桥一直走，能不能走到一个满足 pred 的格子旁边
+function roadReach(w, x, z, pred) {
+  const seen = new Set();
+  const queue = [];
+  for (const d of DIRS) {
+    const nx = x + d.x;
+    const nz = z + d.z;
+    if (isPath(w.cell(nx, nz))) {
+      seen.add(nz * SIZE + nx);
+      queue.push(nx, nz);
+    }
+  }
+  for (let i = 0; i < queue.length; i += 2) {
+    for (const d of DIRS) {
+      const nx = queue[i] + d.x;
+      const nz = queue[i + 1] + d.z;
+      const n = w.cell(nx, nz);
+      if (!n || (nx === x && nz === z)) continue;
+      if (pred(n)) return true;
+      const k = nz * SIZE + nx;
+      if (isPath(n) && !seen.has(k)) {
+        seen.add(k);
+        queue.push(nx, nz);
+      }
+    }
+  }
+  return false;
+}
 // 紧挨着的楼各是什么颜色的屋顶（没有坡屋顶的不算）
 const sideRoofs = (w, h) => DIRS.map((d) => w.roofOf(w.cell(h.x + d.x, h.z + d.z))).filter((r) => r >= 0);
 
@@ -392,6 +422,75 @@ const cond = {
       return t('c.fields.say', n);
     },
   }),
+  // 紧挨着 n 个某种地面物件。key：这句话在文字表里的键
+  beside: (type, n, key) => ({
+    test: (w, h) => adjacent(w, h.x, h.z, type).length >= n,
+    get need() {
+      return t(`${key}.need`);
+    },
+    get say() {
+      return t(`${key}.say`);
+    },
+  }),
+  // ---- 路 ----
+  // 从家门口顺着路（和桥）一直走，走得到某样东西旁边。只当隐藏心愿用的时候不用给 key
+  linked: (type, key = '') => ({
+    test: (w, h) => roadReach(w, h.x, h.z, has(type)),
+    get need() {
+      return key ? t(`${key}.need`) : '';
+    },
+    get say() {
+      return key ? t(`${key}.say`) : '';
+    },
+  }),
+  // 住在路的尽头：门口那格路只通向一边（或者孤零零的一格）
+  deadEnd: () => ({
+    test: (w, h) =>
+      DIRS.some((d) => {
+        const px = h.x + d.x;
+        const pz = h.z + d.z;
+        if (!isPath(w.cell(px, pz))) return false;
+        return DIRS.filter((e) => isPath(w.cell(px + e.x, pz + e.z))).length <= 1;
+      }),
+    get need() {
+      return t('c.deadEnd.need');
+    },
+    get say() {
+      return t('c.deadEnd.say');
+    },
+  }),
+  // 阳台正对着某样东西：朝阳台的方向 range 格以内有它，中间没有更高的楼挡着
+  faces: (type, range, key) => ({
+    test: (w, h) => {
+      for (let k = 1; k <= range; k++) {
+        const n = w.cell(h.x + DIRS[h.dir].x * k, h.z + DIRS[h.dir].z * k);
+        if (!n) return false;
+        if (has(type)(n)) return true;
+        if (w.heightOf(n) > h.level) return false;
+      }
+      return false;
+    },
+    get need() {
+      return t(`${key}.need`);
+    },
+    get say() {
+      return t(`${key}.say`);
+    },
+  }),
+  // 四面里至少有 n 面是空着的水面（岛外也算）
+  waterSides: (n) => ({
+    test: (w, h) =>
+      DIRS.filter((d) => {
+        const c = w.cell(h.x + d.x, h.z + d.z);
+        return !c || (c.water && !c.g && !c.s.length);
+      }).length >= n,
+    get need() {
+      return t('c.waterSides.need', n);
+    },
+    get say() {
+      return t('c.waterSides.say');
+    },
+  }),
 };
 
 // ---------- 住处类型 ----------
@@ -433,6 +532,23 @@ const HOMES = {
       if (c.s[0] && c.s[0].t === 'workshop' && c.s[1] && c.s[1].t === 'room') each({ x, z, level: 1 });
     });
   },
+  overLibrary(w, each) {
+    scan(w, (c, x, z) => {
+      if (c.s[0] && c.s[0].t === 'library' && c.s[1] && c.s[1].t === 'room') each({ x, z, level: 1 });
+    });
+  },
+  // 顶上有露台的那间房间
+  terrace(w, each) {
+    scan(w, (c, x, z) => {
+      const n = c.s.length;
+      if (n >= 2 && c.s[n - 1].t === 'terrace' && c.s[n - 2].t === 'room') each({ x, z, level: n - 2 });
+    });
+  },
+  stilt(w, each) {
+    scan(w, (c, x, z) => {
+      if (c.s[0] && c.s[0].t === 'stilt') each({ x, z, level: 0 });
+    });
+  },
 };
 
 function scan(w, fn) {
@@ -447,6 +563,7 @@ const keyOf = (h) => `${h.x},${h.z},${h.level}`;
 
 const around = (x, z, fn) => DIRS.map((d, k) => fn(x + d.x, z + d.z, k));
 const balconyRecipe = (d) => (x, z) => [[['room', x, z], ['room', x, z], ['balcony', x, z, { level: 1, dir: d }]]];
+const roadRecipe = (x, z) => [[['room', x, z]], ...around(x, z, (rx, rz) => [['room', x, z], ['road', rx, rz]])];
 
 export const ARCHETYPES = {
   tang: {
@@ -783,6 +900,98 @@ export const ARCHETYPES = {
     dream: cond.roofIs(5),
     recipe: (x, z) => [[['room', x, z]]],
   },
+  // ---- 和路有关的居民：看的不是"旁边有没有"，而是"顺着路走不走得到" ----
+  wan: {
+    look: { body: '#b7a58a', hair: '#ece8de', style: 'bun' },
+    home: 'ground',
+    calm: true,
+    must: [cond.deadEnd()],
+    want: [cond.quiet(2), cond.trees(1, 2)],
+    dream: cond.near('orchard', 2),
+    recipe: roadRecipe,
+  },
+  xin: {
+    look: { body: '#5aa06f', hair: '#3b2f2a', hat: 'cap' },
+    home: 'room',
+    needs: ['shop', 'well'],
+    must: [cond.road()],
+    want: [cond.linked('shop', 'n.xin.shop'), cond.linked('well', 'n.xin.well')],
+    dream: cond.linked('dock'),
+    recipe: roadRecipe,
+  },
+  qiao: {
+    look: { body: '#c98f5a', hair: '#4a3a2c', hat: 'straw' },
+    home: 'ground',
+    needs: ['bridge', 'dock'],
+    must: [cond.road()],
+    want: [cond.linked('dock', 'n.qiao.dock'), cond.near('bridge', 2, 'n.qiao.bridge')],
+    dream: cond.water(1),
+    recipe: roadRecipe,
+  },
+  // ---- 新组件带来的居民 ----
+  guo: {
+    look: { body: '#d9694f', hair: '#6b4a3a', hat: 'straw' },
+    home: 'ground',
+    needs: ['orchard', 'well'],
+    must: [cond.beside('orchard', 1, 'n.guo.one')],
+    want: [cond.beside('orchard', 2, 'n.guo.two'), cond.near('well', 2, 'n.guo.well')],
+    dream: cond.near('market', 3),
+    recipe: (x, z) => around(x, z, (ox, oz) => [['room', x, z], ['orchard', ox, oz]]),
+  },
+  juan: {
+    look: { body: '#7d8fb3', hair: '#5a4038', style: 'bun' },
+    home: 'overLibrary',
+    calm: true,
+    needs: ['library', 'lamp'],
+    must: [],
+    want: [cond.quiet(2), cond.lamp(2)],
+    dream: cond.near('pavilion', 3),
+    recipe: (x, z) => [[['library', x, z], ['room', x, z]]],
+  },
+  wang: {
+    look: { body: '#e6a0c0', hair: '#4a4060', style: 'bun' },
+    home: 'balcony',
+    perchAt: [0.2, 0.45],
+    needs: ['fountain', 'lamp'],
+    must: [cond.faces('fountain', 3, 'n.wang.fountain')],
+    want: [cond.minLevel(2, 's.wang.high'), cond.lamp(2)],
+    dream: cond.near('clock', 4),
+    recipe: (x, z) =>
+      [0, 1, 2, 3].map((d) => [
+        ['room', x, z],
+        ['room', x, z],
+        ['balcony', x, z, { level: 1, dir: d }],
+        ['fountain', x + DIRS[d].x, z + DIRS[d].z],
+      ]),
+  },
+  lu: {
+    look: { body: '#f0b7a0', hair: '#7a5236', style: 'short' },
+    home: 'terrace',
+    peak: true,
+    needs: ['terrace'],
+    must: [],
+    want: [cond.tallest(2, 's.lu.tallest'), cond.gardens(1)],
+    dream: cond.near('fountain', 3),
+    recipe: (x, z) => [[['room', x, z], ['terrace', x, z]]],
+  },
+  ting: {
+    look: { body: '#4f9fb0', hair: '#2f3a4a', hat: 'straw' },
+    home: 'stilt',
+    needs: ['stilt', 'dock'],
+    must: [],
+    want: [cond.waterSides(3), cond.dock(2)],
+    dream: cond.near('lighthouse', 4),
+    recipe: (x, z) => around(x, z, (sx, sz) => [['stilt', sx, sz]]),
+  },
+  zhong: {
+    look: { body: '#8c7a5a', hair: '#e8e2d6', hat: 'cap' },
+    home: 'ground',
+    needs: ['clock', 'lamp'],
+    must: [cond.near('clock', 1, 'n.zhong.clock')],
+    want: [cond.road(), cond.lamp(2)],
+    dream: cond.linked('market'),
+    recipe: (x, z) => [[['room', x, z]], ...around(x, z, (cx, cz) => [['room', x, z], ['clock', cx, cz]])],
+  },
 };
 for (const [id, a] of Object.entries(ARCHETYPES)) {
   a.id = id;
@@ -817,6 +1026,10 @@ const NEAR_POOL = [
   { type: 'shop', r: 3, noisy: true },
   { type: 'market', r: 3, noisy: true },
   { type: 'lighthouse', r: 4, tall: true },
+  { type: 'bridge', r: 2 },
+  { type: 'orchard', r: 2 },
+  { type: 'library', r: 3 },
+  { type: 'clock', r: 4 },
 ];
 
 // 两位居民的愿望会不会互相打架：一个怕吵一个带来吵闹，或者一个要住高楼、另一个怕被高楼挡住

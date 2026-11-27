@@ -12,13 +12,13 @@ export const LEVELS = [
   { need: 0, cap: 3, unlock: ['room', 'balcony', 'road', 'garden', 'tree'] },
   { need: 4, cap: 4, unlock: ['lamp', 'shop'] },
   { need: 8, cap: 5, unlock: ['dock', 'well', 'paint'] },
-  { need: 10, cap: 7, stage: 1, unlock: ['tower', 'field'] },
-  { need: 15, cap: 9, unlock: ['workshop', 'windmill'] },
-  { need: 20, cap: 12, stage: 2, unlock: ['greenhouse', 'pavilion'] },
-  { need: 27, cap: 14, unlock: ['market', 'fountain'] },
+  { need: 10, cap: 7, stage: 1, unlock: ['tower', 'field', 'bridge'] },
+  { need: 15, cap: 9, unlock: ['workshop', 'windmill', 'orchard'] },
+  { need: 20, cap: 12, stage: 2, unlock: ['greenhouse', 'pavilion', 'library'] },
+  { need: 27, cap: 14, unlock: ['market', 'fountain', 'terrace'] },
   { need: 33, cap: 17, stage: 3, unlock: ['lighthouse'] },
-  { need: 41, cap: 20, unlock: [] },
-  { need: 50, cap: 20, final: true, unlock: [] },
+  { need: 41, cap: 21, unlock: ['stilt'] },
+  { need: 50, cap: 24, final: true, unlock: ['clock'] },
 ];
 export const MAX_LV = LEVELS.length - 1;
 
@@ -56,9 +56,10 @@ export function unlockLevel(id) {
 export function rewardsOf(lv) {
   const L = LEVELS[lv];
   const out = [];
-  if (L.final) return [t('reward.final1'), t('reward.final2')];
+  if (L.final) out.push(t('reward.final1'));
   if (L.stage) out.push(t('reward.stage', L.stage));
   if (L.unlock.length) out.push(t('reward.unlock', L.unlock.map(nameOf)));
   if (lv > 0 && L.cap > LEVELS[lv - 1].cap) out.push(t('reward.cap', L.cap));
+  if (L.final) out.push(t('reward.final2'));
   return out;
 }

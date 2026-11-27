@@ -10,7 +10,7 @@ import { Weather } from './weather.js';
 // 跟着季节变色的东西：换季时这些零件要重画，别的不用动
 const SEASONAL = new Set(['tree', 'garden', 'field']);
 // 会积雪、会落上树叶的东西：雪厚了一档、换了季节或换了画质时重画
-const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail']);
+const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail', 'orchard', 'terrace', 'stilt', 'clock', 'bridge', 'library']);
 const SEASON_KEYS = [...new Set(SEASON_COLORS.flatMap((s) => Object.keys(s)))];
 const SUMMER = Object.fromEntries(SEASON_KEYS.map((k) => [k, C[k]])); // C 里原本的颜色
 const OVERCAST = new THREE.Color('#b9c2cc'); // 下雨下雪时天色往这个灰里靠
@@ -187,7 +187,7 @@ export class View {
       detail: SCENE.detail,
       isWater: (x, z) => {
         const c = this.world && this.world.cell(Math.floor(x + HALF_SIZE), Math.floor(z + HALF_SIZE));
-        return !c || c.water;
+        return !c || (c.water && !c.g && !c.s.length);
       },
     };
     this.seasonTint = new THREE.Color(1, 1, 1);
@@ -990,7 +990,7 @@ export class View {
         const c = world.cell(x, z);
         const m = this.pickCells.children[i++];
         const h = Math.max(world.heightOf(c) * H, 0.04);
-        const y0 = c.water ? -0.22 : c.locked ? -0.08 : 0;
+        const y0 = c.water ? (c.s.length ? 0 : -0.22) : c.locked ? -0.08 : 0;
         m.position.set(x - HALF_SIZE + 0.5, y0 + h / 2, z - HALF_SIZE + 0.5);
         m.scale.set(1, h, 1);
         m.userData.n = c.s.length;
@@ -1159,7 +1159,7 @@ export class View {
       if (this.ghostType !== h.type) this.buildGhost(h.type);
       const y = h.level * H;
       this.ghostPos.set(cx, y, cz);
-      this.ghostRot = h.type === 'dock' ? DIR_RY[opp(Math.max(0, h.dir))] : h.rot ? DIR_RY[h.dir] : 0;
+      this.ghostRot = h.type === 'dock' ? DIR_RY[opp(Math.max(0, h.dir))] : h.type === 'stilt' ? DIR_RY[Math.max(0, h.dir)] : h.rot ? DIR_RY[h.dir] : 0;
       mats.ghost.color.copy(h.valid ? this.okColor : this.badColor);
       this.hl.material.color.set(h.valid ? '#ffffff' : '#ff8a76');
       this.hlPos.set(cx, (h.type === 'balcony' ? 0 : y) + 0.02, cz);
