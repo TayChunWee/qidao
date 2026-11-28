@@ -101,6 +101,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .arrival b { color: var(--ink); font-weight: 700; white-space: nowrap; }
 .arrival.coming span { color: var(--good); animation: pulse 1.4s ease-in-out infinite; }
 .arrival.coming span::after { content: "…"; }
+/* 居民数这一颗同时是图鉴的入口：前面一本小册子；图鉴里新点亮了人时描一圈金边，打开看过就收起 */
+.arrival { cursor: pointer; pointer-events: auto; }
+.arrival .al-ico { flex: none; width: 15px; height: 15px; margin-right: -3px; color: var(--accent-deep); }
+.arrival .al-ico svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.arrival.fresh { box-shadow: 0 0 0 2px var(--gold); animation: fresh 1.3s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 
 .wish {
@@ -358,6 +363,30 @@ input[type="range"] { flex: 1; min-width: 0; height: 22px; accent-color: var(--a
 .cr-list span { flex: none; color: var(--ink-soft); }
 .cr-body .s-note { margin-top: 0; }
 
+/* 图鉴：所有可能来岛上的人。住下的、来做客玩尽兴的点亮；没见过的只有一个剪影 */
+#album { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(540px, calc(100vw - 24px)); max-height: calc(100% - 32px); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; animation: pop-in 0.3s var(--spring); z-index: 6; background: rgba(var(--paper-rgb), 0.97); }
+#album[hidden] { display: none; }
+#album:not([hidden]) ~ #scrim { display: block; }
+#album h3 { display: flex; align-items: baseline; gap: 10px; padding: 0 2px; font-size: 16px; }
+#album h3 b { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+#album h3 b.full { color: var(--good); }
+.al-grid { flex: 1 1 auto; min-height: 120px; display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 2px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 3px; }
+.al-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 7px 2px 5px; border-radius: 14px; color: var(--ink); transition: background 0.15s; }
+.al-cell:hover, .al-cell.sel { background: rgba(var(--tint-rgb), 0.09); }
+.al-cell.sel { box-shadow: inset 0 0 0 1.5px rgba(var(--tint-rgb), 0.3); }
+.al-cell span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 1.2; }
+.al-cell.vis .avatar { box-shadow: 0 0 0 2px #4a9790; }
+.al-cell.now .avatar { opacity: 0.5; filter: saturate(0.35); }
+.al-cell.off .avatar { background: rgba(var(--tint-rgb), 0.1); box-shadow: none; }
+.al-cell.off .avatar svg { filter: brightness(0); opacity: 0.24; }
+.al-cell.off span, .al-cell.now span { color: var(--ink-soft); }
+.al-info { flex: none; min-height: 58px; padding: 8px 12px 9px; border-radius: 12px; background: rgba(var(--tint-rgb), 0.07); font-size: 13px; line-height: 1.5; }
+.al-info b { margin-right: 8px; font-size: 14px; }
+.al-info em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.al-info em.res { color: var(--accent-deep); }
+.al-info em.vis { color: #3f8f88; }
+.al-info p { color: var(--ink-soft); }
+
 /* ---------- 工具栏 ---------- */
 
 #toolbar-wrap { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 10px; }
@@ -589,7 +618,7 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
 
   /* 居民数：钉在小岛等级下面，和它隔开一段（等级展开时正好落在这段空当里）；不跟着卡片滚动。
      后面那句说明收起来，光标指上去才浮现；有新居民在路上时，留一个一闪一闪的小绿点 */
-  #wishes .arrival { position: fixed; left: 16px; top: 86px; margin: 0; pointer-events: auto; cursor: default; }
+  #wishes .arrival { position: fixed; left: 16px; top: 86px; margin: 0; }
   #wishes .arrival span { display: none; }
   #wishes .arrival.coming::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: pulse 1.4s ease-in-out infinite; }
 
@@ -786,7 +815,9 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   body.dock #tutorial { top: 146px; bottom: auto; }
   /* 输入框放在上半屏，弹出键盘时不会被挡住 */
   #feedback, #backup { top: 8px; transform: translateX(-50%); animation: none; max-height: calc(100% - 16px); }
-  #credits { max-height: calc(100% - 16px); }
+  #credits, #album { max-height: calc(100% - 16px); }
+  #album { padding: 14px 10px 12px; }
+  .al-grid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); }
   .start-card { padding: 0 20px; }
 }
 

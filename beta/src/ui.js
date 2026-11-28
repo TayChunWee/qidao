@@ -15,6 +15,7 @@ const ICON = {
   camLeft: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>'),
   camRight: svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>'),
   settings: svg('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
+  album: svg('<path d="M5.5 4h10.5a2.5 2.5 0 0 1 2.5 2.5V20H8a2.5 2.5 0 0 1-2.5-2.5z"/><path d="M5.5 17.5A2.5 2.5 0 0 1 8 15h10.5"/><circle cx="12" cy="8.2" r="1.7"/><path d="M9.4 12.4a2.7 2.7 0 0 1 5.2 0"/>'),
   tags: svg('<path d="M3.5 11.5 12 4.5l8.5 7"/><path d="M6 9.8V19.5h12V9.8"/><circle cx="12" cy="13" r="1.9"/><path d="M8.8 19.5a3.2 3.2 0 0 1 6.4 0"/>'),
   help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8"/><path d="M12 17v.2"/>'),
   music: svg('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
@@ -92,7 +93,14 @@ export class UI {
     this.wishBox = $('#wishes');
     this.arrival = document.createElement('div');
     this.arrival.className = 'arrival';
+    this.arrival.setAttribute('role', 'button');
+    this.arrival.addEventListener('click', () => {
+      this.h.clickSound();
+      this.openAlbum();
+    });
     this.wishBox.appendChild(this.arrival);
+    this.albumFresh = false;
+    this.albumPick = null;
     this.tagBox = $('#tags');
     this.tagEls = new Map();
     this.hint = $('#hint');
@@ -121,6 +129,7 @@ export class UI {
     for (const b of $('#fb-kind').children) b.textContent = t(`fb.kind.${b.dataset.kind}`);
     this.setFeedbackMsg();
     this.renderCredits();
+    if (!$('#album').hidden) this.renderAlbum();
     for (const [id, el] of this.tabEls) el.querySelector('span').textContent = t(`tab.${id}`);
     this.tabTip.innerHTML = t('tab.tip');
     for (const [id, name] of this.toolNames) this.toolEls.get(id).querySelector('.name').textContent = name();
@@ -536,7 +545,7 @@ export class UI {
     document.addEventListener(
       'touchmove',
       (e) => {
-        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits, #backup')) e.preventDefault();
+        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits, #backup, #album')) e.preventDefault();
       },
       { passive: false },
     );
@@ -598,6 +607,7 @@ export class UI {
       $('#feedback').hidden = true;
       $('#credits').hidden = true;
       $('#backup').hidden = true;
+      $('#album').hidden = true;
       this.setFeedbackMsg('');
     });
     $('#btn-next').innerHTML = ICON.next;
@@ -671,6 +681,7 @@ export class UI {
     });
     this.buildFeedback(panel);
     this.buildCredits(panel);
+    this.buildAlbum(panel);
     this.buildBackup(panel);
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
@@ -937,9 +948,75 @@ export class UI {
   // 居民数，以及还有没有新居民要来。电脑版式里那句说明收起来了，光标指上去才浮现（和繁荣度一样用浏览器自带的提示）
   setArrival(state, n, max) {
     this.lastArrival = [state, n, max];
-    this.arrival.className = `arrival show ${state}`;
-    this.arrival.innerHTML = `<b>${t('arrival.count', n, max)}</b><span>${t(`arrival.${state}`)}</span>`;
-    this.arrival.title = t(`arrival.${state}`);
+    this.arrival.className = `arrival show ${state}${this.albumFresh ? ' fresh' : ''}`;
+    this.arrival.innerHTML = `<i class="al-ico">${ICON.album}</i><b>${t('arrival.count', n, max)}</b><span>${t(`arrival.${state}`)}</span>`;
+    this.arrival.title = `${t(`arrival.${state}`)}\n${t('al.open')}`;
+  }
+
+  // ---------- 图鉴 ----------
+
+  buildAlbum(settingsPanel) {
+    const box = $('#album');
+    this.albumSettings = settingsPanel;
+    const close = () => (box.hidden = true);
+    $('#al-close').addEventListener('click', close);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+    $('#al-grid').addEventListener('click', (e) => {
+      const cell = e.target.closest('.al-cell');
+      if (!cell) return;
+      this.h.clickSound();
+      this.albumPick = cell.dataset.id;
+      this.renderAlbum();
+    });
+  }
+
+  // 图鉴里新点亮了一个人：居民数那一颗描上金边，等玩家打开看
+  flagAlbum() {
+    this.albumFresh = true;
+    this.arrival.classList.add('fresh');
+  }
+
+  openAlbum() {
+    this.albumFresh = false;
+    this.arrival.classList.remove('fresh');
+    this.albumSettings.hidden = true;
+    $('#feedback').hidden = true;
+    $('#credits').hidden = true;
+    $('#backup').hidden = true;
+    this.albumPick = null;
+    this.renderAlbum();
+    $('#album').hidden = false;
+    $('#al-grid').scrollTop = 0;
+    $('#al-close').focus();
+  }
+
+  // 每个人一格：res 住在岛上、vis 来做过客并且玩得尽兴（这两种算点亮）、now 正在做客还没尽兴、off 还没见过
+  renderAlbum() {
+    const list = this.h.albumData();
+    const lit = list.filter((p) => p.state === 'res' || p.state === 'vis').length;
+    const grid = $('#al-grid');
+    const top = grid.scrollTop;
+    grid.innerHTML = list
+      .map((p) => {
+        const known = p.state !== 'off';
+        return (
+          `<button class="al-cell ${p.state}${p.id === this.albumPick ? ' sel' : ''}" data-id="${p.id}">` +
+          `<div class="avatar" style="--c:${p.look.body}">${avatar(p.id, p.look, known ? 3 : 1)}</div><span>${known ? p.name : t('al.unknown')}</span></button>`
+        );
+      })
+      .join('');
+    grid.scrollTop = top;
+    const count = $('#al-count');
+    count.textContent = `${lit} / ${list.length}`;
+    count.classList.toggle('full', lit >= list.length);
+    $('#al-note').textContent = t(lit >= list.length ? 'al.full' : 'al.note');
+    const p = list.find((q) => q.id === this.albumPick);
+    const info = $('#al-info');
+    if (!p) info.innerHTML = `<p>${t('al.tip')}</p>`;
+    else if (p.state === 'off') info.innerHTML = `<b>${t('al.unknown')}</b><em>${t('al.off')}</em><p>${p.locked ? t('al.hintLv', p.lv + 1) : t('al.hintAny')}</p>`;
+    else info.innerHTML = `<b>${p.name}</b><em class="${p.state}">${t(`al.${p.state}`)}</em><p>${p.state === 'now' ? t('al.hintNow') : p.wish}</p>`;
   }
 
   setMood(w, mood) {

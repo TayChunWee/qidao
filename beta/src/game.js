@@ -268,6 +268,7 @@ export class Game {
       },
       hoverSound: () => this.audio.hover(),
       clickSound: () => this.audio.click(),
+      albumData: () => this.albumData(),
     });
     this.ui.setVolumes(this.settings.music, this.settings.sfx);
     this.ui.setTrack(this.settings.track);
@@ -545,6 +546,24 @@ export class Game {
     return evaluateAll(world, this.roster);
   }
 
+  // 图鉴：每个人现在是什么状态。res 住在岛上、vis 来做过客并且玩得尽兴、now 正在做客还没尽兴、off 还没见过。
+  // lv：他需要的东西到小岛几级（从 0 数）才全部解锁；locked：现在还没到那一级
+  albumData() {
+    const here = new Set(this.roster.map((r) => r.spec.id));
+    const guests = new Set(this.visitors.guests.map((v) => v.id));
+    return Object.values(ARCHETYPES).map((a) => {
+      const state = here.has(a.id) ? 'res' : this.visitors.visited.has(a.id) ? 'vis' : guests.has(a.id) ? 'now' : 'off';
+      const lv = Math.max(0, ...a.needs.map(unlockLevel));
+      return { id: a.id, look: a.look, name: a.name, wish: a.wish, state, lv, locked: lv > this.level };
+    });
+  }
+
+  // 图鉴里刚点亮了一个人（新居民住下，或旅客头一回玩得尽兴）：提醒一下；集齐了说一声
+  albumAdded() {
+    this.ui.flagAlbum();
+    if (this.albumData().every((p) => p.state === 'res' || p.state === 'vis')) this.ui.toast(t('toast.albumFull'), 7);
+  }
+
   // 界面上要出卡片的所有人：居民，加上正在岛上做客的旅客
   cards() {
     return [...this.results, ...this.visitors.results];
@@ -638,6 +657,7 @@ export class Game {
     const res = this.residents[i];
     this.audio.arrive();
     this.ui.toast(t('toast.arrive', res.def.name), 2.4);
+    if (!this.visitors.visited.has(id)) this.albumAdded();
     // 刚上岛先说自己想要什么；如果正好有现成的地方能住，就说住进去的感受
     res.say(this.results[i].tier >= 1 ? this.results[i].text : res.def.ask, 8);
   }

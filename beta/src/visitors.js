@@ -270,8 +270,12 @@ export class Visitors {
       v.roomKey = r.key;
       if (r.tier >= 2 && !v.done) {
         v.done = true;
+        const first = !this.visited.has(v.id);
         this.visited.add(v.id);
-        if (mode !== 'init') g.ui.toast(t('toast.guestHappy', name), 3);
+        if (mode !== 'init') {
+          g.ui.toast(t(first ? 'toast.guestNew' : 'toast.guestHappy', name), 3.5);
+          if (first) g.albumAdded();
+        }
       }
     });
   }
