@@ -918,6 +918,53 @@ export function buildPart(kind, p = {}) {
       break;
     }
 
+    case 'inn': {
+      // 民宿：白墙配深色木梁，正面挂一块招牌。up：盖在楼上的，正面没有门
+      ry = DIR_RY[p.d];
+      glowMat = mats.glow[1];
+      g.box(BODY, H, BODY, 0, 0, 0, C.innWall);
+      g.box(BODY + 0.04, 0.06, BODY + 0.04, 0, 0, 0, C.woodDark);
+      g.box(BODY + 0.03, 0.035, BODY + 0.03, 0, H - 0.035, 0, C.woodDark);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.box(0.05, H, 0.05, sx * (HALF - 0.012), 0, sz * (HALF - 0.012), C.woodDark);
+      if (p.up) {
+        for (const sx of [-0.19, 0.19]) {
+          g.box(0.18, 0.24, 0.03, sx, 0.2, HALF, C.frame);
+          glow.box(0.12, 0.18, 0.04, sx, 0.23, HALF, '#fff');
+        }
+      } else {
+        g.box(0.24, 0.42, 0.03, -0.16, 0.06, HALF, C.frame);
+        g.box(0.18, 0.38, 0.045, -0.16, 0.06, HALF, C.innDoor);
+        g.ball(0.015, -0.1, 0.25, HALF + 0.03, C.spark);
+        g.box(0.32, 0.04, 0.13, -0.16, 0, HALF + 0.065, C.stone);
+        g.box(0.2, 0.24, 0.03, 0.2, 0.2, HALF, C.frame);
+        glow.box(0.14, 0.18, 0.04, 0.2, 0.23, HALF, '#fff');
+        // 窗台上的一盆花
+        g.box(0.2, 0.05, 0.07, 0.2, 0.15, HALF + 0.035, C.wood);
+        for (let i = 0; i < 3; i++) g.ball(0.035, 0.14 + i * 0.06, 0.23, HALF + 0.045, C.flowers[(i * 2) % 5]);
+      }
+      for (const sx of [-1, 1]) {
+        g.box(0.03, 0.24, 0.2, sx * HALF, 0.2, 0, C.frame);
+        glow.box(0.04, 0.18, 0.14, sx * HALF, 0.23, 0, '#fff');
+      }
+      g.box(0.2, 0.24, 0.03, 0, 0.2, -HALF, C.frame);
+      glow.box(0.14, 0.18, 0.04, 0, 0.23, -HALF, '#fff');
+      // 招牌：墙上伸出一根横杆，吊着一块木牌，牌子两面各有一个黄色的圆
+      g.box(0.03, 0.03, 0.24, 0.37, 0.52, HALF + 0.12, C.woodDark);
+      g.box(0.03, 0.15, 0.17, 0.37, 0.35, HALF + 0.13, C.innRoof);
+      g.ball(0.036, 0.37, 0.425, HALF + 0.13, C.spark);
+      break;
+    }
+
+    case 'innroof': {
+      g.box(0.95, 0.04, 0.95, 0, 0, 0, C.woodDark);
+      g.cone(0.69, 0.42, 4, 0, 0.04, 0, C.innRoof, Math.PI / 4);
+      if (SCENE.snow) snowCap(g, 0.69, 0.42, 4, 0.04, Math.PI / 4);
+      g.box(0.1, 0.24, 0.1, -0.2, 0.1, -0.16, C.brick);
+      g.box(0.13, 0.03, 0.13, -0.2, 0.34, -0.16, C.brickDark);
+      if (SCENE.snow) g.box(0.13, 0.02, 0.13, -0.2, 0.37, -0.16, C.snow);
+      break;
+    }
+
     case 'terrace': {
       const wc = wallColor(p.c, p.tone);
       g.box(0.93, 0.05, 0.93, 0, 0, 0, C.trim);
@@ -1121,11 +1168,19 @@ export function buildPart(kind, p = {}) {
         // 塔身的窄窗
         g.add(new THREE.BoxGeometry(0.12, 0.26, 0.02), C.frame, ex * 0.28, 0.98, ez * 0.28, r);
         glow.add(new THREE.BoxGeometry(0.075, 0.21, 0.03), '#fff', ex * 0.28, 0.98, ez * 0.28, r);
-        // 四面的钟：金边、亮着的钟面、十点十分的两根针
+        // 四面的钟：金边、亮着的钟面、两根会走的针
         g.add(new THREE.CylinderGeometry(0.185, 0.185, 0.02, 16), C.spark, ex * 0.3, 1.57, ez * 0.3, r, Math.PI / 2);
         glow.add(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 16), '#fff', ex * 0.302, 1.57, ez * 0.302, r, Math.PI / 2);
-        g.add(new THREE.BoxGeometry(0.022, 0.085, 0.012).translate(0, 0.036, 0), C.metal, ex * 0.322, 1.57, ez * 0.322, r, 0, 1.05);
-        g.add(new THREE.BoxGeometry(0.016, 0.13, 0.012).translate(0, 0.058, 0), C.metal, ex * 0.322, 1.57, ez * 0.322, r, 0, -1.05);
+        // 两根针各是一个小网格，跟着游戏里的时间走（view.js 每帧转它）。先摆在十点十分：工具栏的小图和摆放预览就是这个样子
+        for (const [kind, w, len, at] of [['h', 0.022, 0.085, 5.3233], ['m', 0.016, 0.13, 1.0472]]) {
+          const hg = new Geo();
+          hg.add(new THREE.BoxGeometry(w, len, 0.012).translate(0, len * 0.43, 0), C.metal);
+          const hand = new THREE.Mesh(hg.build(), mats.solid);
+          hand.position.set(ex * 0.322, 1.57, ez * 0.322);
+          hand.rotation.set(0, r, -at);
+          hand.userData.hand = kind;
+          extras.push(hand);
+        }
         g.add(new THREE.BoxGeometry(0.03, 0.03, 0.016), C.metal, ex * 0.322, 1.57, ez * 0.322, r);
       }
       g.cone(0.48, 0.44, 4, 0, 1.82, 0, C.slate, Math.PI / 4);
@@ -1163,23 +1218,55 @@ export function buildResident(def) {
   if (def.hat === 'straw') {
     g.cyl(0.15, 0.15, 0.015, 10, 0, 0.32, 0, C.straw);
     g.cyl(0.07, 0.085, 0.06, 8, 0, 0.33, 0, C.straw);
+    if (def.tint) g.cyl(0.084, 0.09, 0.022, 8, 0, 0.335, 0, def.tint);
+  } else if (def.hat === 'li') {
+    // 斗笠
+    g.cone(0.17, 0.1, 10, 0, 0.305, 0, C.straw);
   } else if (def.hat === 'cone') {
     // 观星人的尖帽
     g.cyl(0.13, 0.13, 0.015, 10, 0, 0.32, 0, def.hair);
     g.cone(0.085, 0.2, 8, 0, 0.33, 0, def.hair);
     g.ball(0.02, 0, 0.53, 0, C.spark);
   } else if (def.hat === 'cap') {
-    g.cyl(0.088, 0.092, 0.045, 10, 0, 0.32, 0, C.metal);
-    g.box(0.12, 0.012, 0.07, 0, 0.32, 0.09, C.metal);
+    g.cyl(0.088, 0.092, 0.045, 10, 0, 0.32, 0, def.tint || C.metal);
+    g.box(0.12, 0.012, 0.07, 0, 0.32, 0.09, def.tint || C.metal);
+  } else if (def.hat === 'toque') {
+    // 面包师的高帽
+    g.cyl(0.085, 0.08, 0.07, 10, 0, 0.325, 0, def.tint);
+    g.ball(0.095, 0, 0.42, 0, def.tint, 1);
   } else if (def.hat === 'beret') {
     g.ball(0.088, 0, 0.3, -0.02, def.hair, 1);
-    g.cyl(0.1, 0.08, 0.035, 10, 0.02, 0.345, 0, '#c0504a');
-    g.ball(0.015, 0.02, 0.39, 0, '#c0504a');
+    g.cyl(0.1, 0.08, 0.035, 10, 0.02, 0.345, 0, def.tint || '#c0504a');
+    g.ball(0.015, 0.02, 0.39, 0, def.tint || '#c0504a');
   } else {
     g.ball(0.09, 0, 0.3, -0.025, def.hair, 1);
     if (def.style !== 'short') g.ball(0.045, 0, 0.39, -0.03, def.hair, 0);
   }
   for (const sx of [-0.032, 0.032]) g.box(0.018, 0.024, 0.01, sx, 0.265, 0.082, '#3b2f2a');
+  const mesh = new THREE.Mesh(g.build(), mats.solid);
+  mesh.castShadow = true;
+  const group = new THREE.Group();
+  group.add(mesh);
+  return group;
+}
+
+// 送旅客来的船：比码头边拴着的小船大一圈，有船舱和一面帆。船头朝本地的 +z
+export function buildBoat() {
+  const g = new Geo();
+  g.box(0.36, 0.15, 0.7, 0, 0, -0.04, C.wood);
+  g.add(new THREE.ConeGeometry(0.18, 0.3, 4), C.wood, 0, 0.075, 0.46, 0, Math.PI / 2);
+  g.box(0.39, 0.03, 0.73, 0, 0.1, -0.04, C.woodDark);
+  g.box(0.3, 0.03, 0.62, 0, 0.15, -0.04, C.woodLight);
+  // 船舱
+  g.box(0.24, 0.17, 0.26, 0, 0.18, -0.2, C.frame);
+  g.box(0.28, 0.035, 0.3, 0, 0.35, -0.2, C.awningA);
+  for (const sx of [-1, 1]) g.box(0.012, 0.07, 0.12, sx * 0.12, 0.24, -0.2, C.innDoor);
+  // 桅杆、三角帆和一面小旗
+  g.cyl(0.014, 0.014, 0.62, 6, 0, 0.18, 0.1, C.woodDark);
+  for (const side of [-1, 1]) {
+    g.tri([0, 0.77, 0.1], [0, 0.27, 0.1], [0, 0.27, 0.5], C.awningB, [side, 0.4, 0.25]);
+    g.tri([0, 0.86, 0.1], [0, 0.79, 0.1], [0, 0.825, -0.04], C.awningA, [side, 0.82, 0.05]);
+  }
   const mesh = new THREE.Mesh(g.build(), mats.solid);
   mesh.castShadow = true;
   const group = new THREE.Group();

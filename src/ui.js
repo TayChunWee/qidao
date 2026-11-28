@@ -1,5 +1,6 @@
 // 界面层：全部是叠在画布上的普通网页元素。
 import { MODULES, TABS, VERSION, AUTHOR } from './config.js';
+import { avatar } from './avatars.js';
 import { LEVELS, unlockLevel } from './progression.js';
 import { FPS_CHOICES, QUALITY_MODES } from './perf.js';
 import { TRACKS } from './music.js';
@@ -14,6 +15,8 @@ const ICON = {
   camLeft: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>'),
   camRight: svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>'),
   settings: svg('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
+  album: svg('<path d="M5.5 4h10.5a2.5 2.5 0 0 1 2.5 2.5V20H8a2.5 2.5 0 0 1-2.5-2.5z"/><path d="M5.5 17.5A2.5 2.5 0 0 1 8 15h10.5"/><circle cx="12" cy="8.2" r="1.7"/><path d="M9.4 12.4a2.7 2.7 0 0 1 5.2 0"/>'),
+  tags: svg('<path d="M3.5 11.5 12 4.5l8.5 7"/><path d="M6 9.8V19.5h12V9.8"/><circle cx="12" cy="13" r="1.9"/><path d="M8.8 19.5a3.2 3.2 0 0 1 6.4 0"/>'),
   help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8"/><path d="M12 17v.2"/>'),
   music: svg('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
   sound: svg('<path d="M4 10v4h3l5 4V6L7 10z"/><path d="M16 9a4 4 0 0 1 0 6"/>'),
@@ -32,13 +35,6 @@ const ICON = {
   leaf: svg('<path d="M5 19c0-8 5-13 14-14 0 9-5 14-14 14z"/><path d="M5 19 13 11"/>'),
   cloud: svg('<path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.3 3.3 0 0 1 17.5 17z"/><path d="M9 20v1M13 20v1M17 20v1"/>'),
 };
-
-// 四档心情 + 难过，对应嘴巴的形状
-const MOUTH = ['M15 26h10', 'M14 25q6 4 12 0', 'M13 24q7 8 14 0', 'M12 23q8 12 16 0z', 'M14 28q6-5 12 0'];
-const face = (mood) =>
-  `<svg viewBox="0 0 40 40"><circle cx="14" cy="17" r="2.3" fill="#4a3a32"/><circle cx="26" cy="17" r="2.3" fill="#4a3a32"/>` +
-  (mood === 3 ? '<circle cx="9" cy="23" r="3" fill="#fff" opacity=".35"/><circle cx="31" cy="23" r="3" fill="#fff" opacity=".35"/>' : '') +
-  `<path d="${MOUTH[mood]}" fill="${mood === 3 ? '#4a3a32' : 'none'}" stroke="#4a3a32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const $ = (s) => document.querySelector(s);
 // 界面的明暗。每一项：样式变量、白天的颜色、夜里的颜色、是不是"字"；写成 rgb 的三个数，中间的过渡现算。
@@ -97,7 +93,16 @@ export class UI {
     this.wishBox = $('#wishes');
     this.arrival = document.createElement('div');
     this.arrival.className = 'arrival';
+    this.arrival.setAttribute('role', 'button');
+    this.arrival.addEventListener('click', () => {
+      this.h.clickSound();
+      this.openAlbum();
+    });
     this.wishBox.appendChild(this.arrival);
+    this.albumFresh = false;
+    this.albumPick = null;
+    this.tagBox = $('#tags');
+    this.tagEls = new Map();
     this.hint = $('#hint');
     this.toastEl = $('#toast');
     this.tooltip = $('#tooltip');
@@ -124,6 +129,7 @@ export class UI {
     for (const b of $('#fb-kind').children) b.textContent = t(`fb.kind.${b.dataset.kind}`);
     this.setFeedbackMsg();
     this.renderCredits();
+    if (!$('#album').hidden) this.renderAlbum();
     for (const [id, el] of this.tabEls) el.querySelector('span').textContent = t(`tab.${id}`);
     this.tabTip.innerHTML = t('tab.tip');
     for (const [id, name] of this.toolNames) this.toolEls.get(id).querySelector('.name').textContent = name();
@@ -527,7 +533,7 @@ export class UI {
       return;
     }
     const has = (c) => (w.el.classList.contains(c) ? ` ${c}` : '');
-    box.className = `panel${has('has-bonus')}${has('bonus-done')}${has('up')}${has('down')}${box.classList.contains('fade') ? ' fade' : ''}`;
+    box.className = `panel${has('guest')}${has('has-bonus')}${has('bonus-done')}${has('up')}${has('down')}${box.classList.contains('fade') ? ' fade' : ''}`;
     box.innerHTML = '';
     box.appendChild(w.el.querySelector('.wish-body').cloneNode(true));
     box.hidden = false;
@@ -539,7 +545,7 @@ export class UI {
     document.addEventListener(
       'touchmove',
       (e) => {
-        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits, #backup')) e.preventDefault();
+        if (!e.target.closest || !e.target.closest('#wishes, #tool-list, #settings, #feedback, #credits, #backup, #album')) e.preventDefault();
       },
       { passive: false },
     );
@@ -556,6 +562,8 @@ export class UI {
     $('#cam-left').innerHTML = ICON.camLeft;
     $('#cam-right').innerHTML = ICON.camRight;
     $('#btn-help').innerHTML = ICON.help;
+    $('#btn-tags').innerHTML = ICON.tags;
+    $('#btn-tags').addEventListener('click', () => this.h.toggleTags());
     $('#btn-settings').innerHTML = ICON.settings;
     $('#ico-music').innerHTML = ICON.music;
     $('#ico-sfx').innerHTML = ICON.sound;
@@ -599,6 +607,7 @@ export class UI {
       $('#feedback').hidden = true;
       $('#credits').hidden = true;
       $('#backup').hidden = true;
+      $('#album').hidden = true;
       this.setFeedbackMsg('');
     });
     $('#btn-next').innerHTML = ICON.next;
@@ -672,6 +681,7 @@ export class UI {
     });
     this.buildFeedback(panel);
     this.buildCredits(panel);
+    this.buildAlbum(panel);
     this.buildBackup(panel);
     this.clockIcon = $('#clock-icon');
     this.clockText = $('#clock-text');
@@ -868,7 +878,7 @@ export class UI {
   // spec：wishes.js 里的居民模板。animate：新来的居民卡片会滑进来
   addResident(spec, animate) {
     const el = document.createElement('button');
-    el.className = `wish${animate ? ' enter' : ''}`;
+    el.className = `wish${spec.guest ? ' guest' : ''}${animate ? ' enter' : ''}`;
     el.innerHTML =
       `<div class="avatar" style="--c:${spec.look.body}"></div>` +
       `<div class="wish-body"><div class="wish-top"><b>${spec.name}</b><span class="tier"></span><span class="pips"><i></i><i></i><i></i><i class="star"></i></span></div>` +
@@ -880,7 +890,7 @@ export class UI {
     // 单手版式里那行"居民数"不在这个盒子里
     if (this.arrival.parentNode === this.wishBox) this.wishBox.insertBefore(el, this.arrival);
     else this.wishBox.appendChild(el);
-    this.wishEls.set(spec.id, { el, spec, mood: -1, tier: 0, bonus: false });
+    this.wishEls.set(spec.id, { el, spec, mood: -1, tier: 0, bonus: false, guest: !!spec.guest });
     const b = document.createElement('div');
     b.className = 'bubble';
     $('#bubbles').appendChild(b);
@@ -888,11 +898,27 @@ export class UI {
     if (animate) requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   }
 
+  // 一位旅客走了：卡片、气泡、房子上的标签都收掉
+  removeResident(id) {
+    const w = this.wishEls.get(id);
+    if (w) w.el.remove();
+    const b = this.bubbleEls.get(id);
+    if (b) b.el.remove();
+    const g = this.tagEls.get(id);
+    if (g) g.el.remove();
+    this.wishEls.delete(id);
+    this.bubbleEls.delete(id);
+    this.tagEls.delete(id);
+    if (this.openWishId === id) this.openWish(null);
+  }
+
   clearResidents() {
     for (const w of this.wishEls.values()) w.el.remove();
     for (const b of this.bubbleEls.values()) b.el.remove();
+    for (const g of this.tagEls.values()) g.el.remove();
     this.wishEls.clear();
     this.bubbleEls.clear();
+    this.tagEls.clear();
     this.openWish(null);
   }
 
@@ -905,14 +931,16 @@ export class UI {
       const el = w.el;
       // 已经满意的居民收成一行，鼠标移上去再展开；还需要照顾的排在前面
       el.classList.toggle('compact', r.tier >= 2);
-      el.style.order = r.tier < 2 ? 0 : r.bonus && !r.bonus.done ? 1 : 2;
-      el.querySelector('.tier').textContent = t('tier', r.tier);
+      // 旅客排在最前面。他们只有两个心愿，卡片上写"旅客"，表情比如愿的个数高一档（刚到时也是笑着的）
+      el.style.order = r.guest ? -1 : r.tier < 2 ? 0 : r.bonus && !r.bonus.done ? 1 : 2;
+      el.querySelector('.tier').textContent = r.guest ? t('g.tag') : t('tier', r.tier);
+      if (r.guest) el.querySelector('.wish-text').textContent = r.wish;
       el.querySelectorAll('.pips i').forEach((p, i) => p.classList.toggle('on', i < 3 ? i < r.tier : w.bonus));
       el.querySelector('.wish-need').innerHTML = r.need.map((n) => `<span>${n}</span>`).join('');
       el.classList.toggle('has-bonus', !!r.bonus);
       el.classList.toggle('bonus-done', w.bonus);
       el.querySelector('.wish-bonus').innerHTML = r.bonus ? `<em>${t(w.bonus ? 'wish.bonusDone' : 'wish.bonus')}</em>${r.bonus.text}` : '';
-      this.setMood(w, r.tier);
+      this.setMood(w, r.tier + (r.guest ? 1 : 0));
     }
     this.renderWishDetail();
   }
@@ -920,15 +948,81 @@ export class UI {
   // 居民数，以及还有没有新居民要来。电脑版式里那句说明收起来了，光标指上去才浮现（和繁荣度一样用浏览器自带的提示）
   setArrival(state, n, max) {
     this.lastArrival = [state, n, max];
-    this.arrival.className = `arrival show ${state}`;
-    this.arrival.innerHTML = `<b>${t('arrival.count', n, max)}</b><span>${t(`arrival.${state}`)}</span>`;
-    this.arrival.title = t(`arrival.${state}`);
+    this.arrival.className = `arrival show ${state}${this.albumFresh ? ' fresh' : ''}`;
+    this.arrival.innerHTML = `<i class="al-ico">${ICON.album}</i><b>${t('arrival.count', n, max)}</b><span>${t(`arrival.${state}`)}</span>`;
+    this.arrival.title = `${t(`arrival.${state}`)}\n${t('al.open')}`;
+  }
+
+  // ---------- 图鉴 ----------
+
+  buildAlbum(settingsPanel) {
+    const box = $('#album');
+    this.albumSettings = settingsPanel;
+    const close = () => (box.hidden = true);
+    $('#al-close').addEventListener('click', close);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+    $('#al-grid').addEventListener('click', (e) => {
+      const cell = e.target.closest('.al-cell');
+      if (!cell) return;
+      this.h.clickSound();
+      this.albumPick = cell.dataset.id;
+      this.renderAlbum();
+    });
+  }
+
+  // 图鉴里新点亮了一个人：居民数那一颗描上金边，等玩家打开看
+  flagAlbum() {
+    this.albumFresh = true;
+    this.arrival.classList.add('fresh');
+  }
+
+  openAlbum() {
+    this.albumFresh = false;
+    this.arrival.classList.remove('fresh');
+    this.albumSettings.hidden = true;
+    $('#feedback').hidden = true;
+    $('#credits').hidden = true;
+    $('#backup').hidden = true;
+    this.albumPick = null;
+    this.renderAlbum();
+    $('#album').hidden = false;
+    $('#al-grid').scrollTop = 0;
+    $('#al-close').focus();
+  }
+
+  // 每个人一格：res 住在岛上、vis 来做过客并且玩得尽兴（这两种算点亮）、now 正在做客还没尽兴、off 还没见过
+  renderAlbum() {
+    const list = this.h.albumData();
+    const lit = list.filter((p) => p.state === 'res' || p.state === 'vis').length;
+    const grid = $('#al-grid');
+    const top = grid.scrollTop;
+    grid.innerHTML = list
+      .map((p) => {
+        const known = p.state !== 'off';
+        return (
+          `<button class="al-cell ${p.state}${p.id === this.albumPick ? ' sel' : ''}" data-id="${p.id}">` +
+          `<div class="avatar" style="--c:${p.look.body}">${avatar(p.id, p.look, known ? 3 : 1)}</div><span>${known ? p.name : t('al.unknown')}</span></button>`
+        );
+      })
+      .join('');
+    grid.scrollTop = top;
+    const count = $('#al-count');
+    count.textContent = `${lit} / ${list.length}`;
+    count.classList.toggle('full', lit >= list.length);
+    $('#al-note').textContent = t(lit >= list.length ? 'al.full' : 'al.note');
+    const p = list.find((q) => q.id === this.albumPick);
+    const info = $('#al-info');
+    if (!p) info.innerHTML = `<p>${t('al.tip')}</p>`;
+    else if (p.state === 'off') info.innerHTML = `<b>${t('al.unknown')}</b><em>${t('al.off')}</em><p>${p.locked ? t('al.hintLv', p.lv + 1) : t('al.hintAny')}</p>`;
+    else info.innerHTML = `<b>${p.name}</b><em class="${p.state}">${t(`al.${p.state}`)}</em><p>${p.state === 'now' ? t('al.hintNow') : p.wish}</p>`;
   }
 
   setMood(w, mood) {
     if (w.mood === mood) return;
     w.mood = mood;
-    w.el.querySelector('.avatar').innerHTML = face(mood);
+    w.el.querySelector('.avatar').innerHTML = avatar(w.spec.id, w.spec.look, mood);
   }
 
   // 摆放前的预览：这一步会让居民的评价变成什么。preview：[{ id, tier, bonus }]
@@ -941,13 +1035,13 @@ export class UI {
       w.el.classList.toggle('down', delta < 0 || bonus < 0);
       const tag = w.el.querySelector('.wish-preview');
       if (delta) {
-        tag.textContent = t(delta > 0 ? 'preview.up' : 'preview.down', t('tier', p.tier));
-        this.setMood(w, delta < 0 ? 4 : p.tier);
+        tag.textContent = t(delta > 0 ? 'preview.up' : 'preview.down', t(w.guest ? 'g.tier' : 'tier', p.tier));
+        this.setMood(w, delta < 0 ? 4 : p.tier + (w.guest ? 1 : 0));
       } else if (bonus) {
         tag.textContent = t(bonus > 0 ? 'preview.bonusUp' : 'preview.bonusDown');
         this.setMood(w, bonus < 0 ? 4 : 3);
       } else {
-        this.setMood(w, w.tier);
+        this.setMood(w, w.tier + (w.guest ? 1 : 0));
       }
     }
     if (this.openWishId) this.renderWishDetail();
@@ -984,6 +1078,54 @@ export class UI {
     const px = Math.min(window.innerWidth - b.w - 8, Math.max(8, x + 6));
     const py = Math.max(8, y - b.h - 6);
     b.el.style.transform = `translate(${px}px, ${py}px)`;
+  }
+
+  // ---------- 认房子 ----------
+
+  // 顶栏上"住户标签"那个开关亮不亮
+  setTagsOn(on) {
+    const b = $('#btn-tags');
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on);
+  }
+
+  // 房子上的住户标签。list：这一帧要显示的 [{ id, x, y, near }]，不在里面的收起来。
+  // 头像直接用居民卡片上现在的表情，摆放前的预览也会跟着变
+  setTags(list) {
+    if (!list.length && !this.tagsShown) return;
+    const seen = new Set();
+    for (const s of list) {
+      const w = this.wishEls.get(s.id);
+      if (!w) continue;
+      let g = this.tagEls.get(s.id);
+      if (!g) {
+        const el = document.createElement('div');
+        el.className = 'tag';
+        el.innerHTML = `<div class="avatar" style="--c:${w.spec.look.body}"></div><b></b>`;
+        this.tagBox.appendChild(el);
+        g = { el, key: '' };
+        this.tagEls.set(s.id, g);
+      }
+      const key = `${w.mood}|${w.spec.name}`;
+      if (g.key !== key) {
+        g.key = key;
+        g.el.firstChild.innerHTML = avatar(s.id, w.spec.look, w.mood);
+        g.el.lastChild.textContent = w.spec.name;
+      }
+      g.el.classList.add('show');
+      g.el.classList.toggle('near', !!s.near);
+      g.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+      seen.add(s.id);
+    }
+    for (const [id, g] of this.tagEls) if (!seen.has(id)) g.el.classList.remove('show');
+    this.tagsShown = seen.size > 0;
+  }
+
+  // 鼠标指着或点中的那座房子里住的人：他们的卡片描一圈边。reveal：顺便把第一张卡片滚到看得见的地方
+  setPeek(ids, reveal = false) {
+    for (const [id, w] of this.wishEls) w.el.classList.toggle('peek', ids.includes(id));
+    const first = reveal && this.wishEls.get(ids[0]);
+    if (first) first.el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }
 
   // ---------- 提示 ----------

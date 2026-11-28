@@ -8,7 +8,7 @@ export const HALF = BODY / 2;
 export const DAY_LENGTH = 600; // 一昼夜的秒数（十分钟）
 export const SEASON_DAYS = 3; // 一个季节几天。季节：0 春 1 夏 2 秋 3 冬
 // 版本：每次发布到线上时改成当天的日期。显示在"制作与鸣谢"里，也随玩家的反馈一起寄出
-export const VERSION = '2026-11-27e';
+export const VERSION = '2026-11-28h';
 export const AUTHOR = 'ovob'; // 作者署名，显示在"制作与鸣谢"最上面
 
 // 方向：0 北(-z) 1 东(+x) 2 南(+z) 3 西(-x)
@@ -116,6 +116,9 @@ export const C = {
   smoke: '#f6f3ec',
   spark: '#ffe08a',
   libWall: '#8fb3bd', // 书屋的墙
+  innWall: '#fbf3e2', // 民宿：白墙、深色木梁、青绿的顶
+  innRoof: '#4a9790',
+  innDoor: '#3f7f8f',
   books: ['#d9694f', '#e8b04c', '#5f8f8a', '#7d6fa8', '#f3ead6'],
   slate: '#5f6b82', // 钟楼的顶
   // 果树的叶子按季节另配：结果子的时候还是绿的，红果子才显得出来
@@ -152,7 +155,7 @@ export const ROOF_DEFAULT = 1;
 export const TABS = [{ id: 'build' }, { id: 'ground' }, { id: 'paint' }];
 
 // tab：在工具栏的哪一页；rot：摆放时 R 键是否有意义；paint：是否支持按住拖动连续摆放
-// 数字键 1-9 对应当前这一页里从左到右的模块
+// 数字键 1-9 对应当前这一页里从左到右的前九个模块，Shift 加数字是第十个往后的
 export const MODULES = [
   { id: 'room', tab: 'build' },
   { id: 'balcony', tab: 'build', rot: true },
@@ -163,6 +166,7 @@ export const MODULES = [
   { id: 'greenhouse', tab: 'build', rot: true },
   { id: 'market', tab: 'build', rot: true },
   { id: 'lighthouse', tab: 'build' },
+  { id: 'inn', tab: 'build', rot: true },
   { id: 'library', tab: 'build', rot: true },
   { id: 'terrace', tab: 'build' },
   { id: 'stilt', tab: 'build' },
@@ -183,4 +187,10 @@ export const MODULES = [
   ...PAINTS.map((c) => ({ id: `roof${c}`, tab: 'paint', paint: true, brush: 'roof', color: c })),
 ];
 // 一页里排在第十个以后的没有数字键
-for (const tab of TABS) MODULES.filter((m) => m.tab === tab.id).forEach((m, i) => (m.key = i < 9 ? String(i + 1) : ''));
+// slot：在这一页里排第几个；key：按钮角上写的快捷键，第十个往后是 Shift 加数字
+for (const tab of TABS) {
+  MODULES.filter((m) => m.tab === tab.id).forEach((m, i) => {
+    m.slot = i;
+    m.key = i < 9 ? String(i + 1) : i < 18 ? `⇧${i - 8}` : '';
+  });
+}

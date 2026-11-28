@@ -7,6 +7,8 @@ import { MusicPlayer } from './music.js';
 
 // 曲目相对合成音乐的音量。曲目的响度已经统一，这个数让两者听起来差不多响
 const FILE_LEVEL = 1;
+// 雨声有多大（过滤之前的白噪声乘上它）。要的是若有若无的细雨，不是哗哗的大雨
+const RAIN_LEVEL = 0.03;
 
 const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
 const PENTA = [0, 2, 4, 7, 9]; // C 大调五声音阶
@@ -106,6 +108,8 @@ export class AudioEngine {
     this.music = new MusicPlayer();
     this.trackMode = 'shuffle';
     this.synthOn = false;
+    this.raining = false;
+    this.rainGain = null;
     // 页面切到后台（换了标签页、最小化、关掉）就停声，回来再接着响
     const sync = () => this.setPaused(document.hidden);
     document.addEventListener('visibilitychange', sync);
@@ -221,6 +225,7 @@ export class AudioEngine {
     lfo.connect(G(0.022, seaGain.gain));
     lfo.start();
     sea.start();
+    if (this.raining) this.setRain(true);
 
     this.noise = noiseBuffer(ctx, 1, false);
 
@@ -273,6 +278,58 @@ export class AudioEngine {
       this.step = Math.ceil(this.step / 8) * 8;
       this.nextTime = now + 0.5;
     }
+  }
+
+  // 细雨声：一层沙沙的底，加一层更细的高频，音量很小、慢慢起伏。和海浪一样走音乐那一路，
+  // 所以它和背景音乐的音量比例是固定的，怎么调音量都不会盖过音乐。第一次下雨时才搭起来
+  setRain(on) {
+    this.raining = on;
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    if (!this.rainGain) {
+      if (!on) return;
+      const g = (this.rainGain = ctx.createGain());
+      g.gain.value = 0;
+      g.connect(this.musicBus);
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuffer(ctx, 3, false);
+      src.loop = true;
+      const band = (type, f, q) => {
+        const b = ctx.createBiquadFilter();
+        b.type = type;
+        b.frequency.value = f;
+        if (q) b.Q.value = q;
+        return b;
+      };
+      const mix = (v) => {
+        const m = ctx.createGain();
+        m.gain.value = v;
+        m.connect(g);
+        return m;
+      };
+      // 底：落在地上、屋顶上的沙沙声
+      const hp = band('highpass', 700);
+      const lp = band('lowpass', 3800);
+      src.connect(hp);
+      hp.connect(lp);
+      lp.connect(mix(1));
+      // 上面薄薄一层更细的声音
+      const fine = band('bandpass', 6200, 0.8);
+      src.connect(fine);
+      fine.connect(mix(0.45));
+      // 一阵大一阵小
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.07;
+      const depth = ctx.createGain();
+      depth.gain.value = RAIN_LEVEL * 0.22;
+      lfo.connect(depth);
+      depth.connect(g.gain);
+      lfo.start();
+      src.start();
+    }
+    // 雨声慢慢起来，雨停了慢慢收
+    this.rainGain.gain.setTargetAtTime(on ? RAIN_LEVEL : 0, now, on ? 2.5 : 3.5);
   }
 
   setSfx(v) {

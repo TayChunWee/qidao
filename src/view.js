@@ -10,7 +10,7 @@ import { Weather } from './weather.js';
 // 跟着季节变色的东西：换季时这些零件要重画，别的不用动
 const SEASONAL = new Set(['tree', 'garden', 'field']);
 // 会积雪、会落上树叶的东西：雪厚了一档、换了季节或换了画质时重画
-const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail', 'orchard', 'terrace', 'stilt', 'clock', 'bridge', 'library']);
+const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail', 'orchard', 'terrace', 'stilt', 'clock', 'bridge', 'library', 'innroof']);
 const SEASON_KEYS = [...new Set(SEASON_COLORS.flatMap((s) => Object.keys(s)))];
 const SUMMER = Object.fromEntries(SEASON_KEYS.map((k) => [k, C[k]])); // C 里原本的颜色
 const OVERCAST = new THREE.Color('#b9c2cc'); // 下雨下雪时天色往这个灰里靠
@@ -216,6 +216,9 @@ export class View {
     this.bobbers = new Set();
     this.spinners = new Set();
     this.turners = new Set();
+    this.hands = new Set(); // 钟楼的指针
+    this.stale = new Map(); // 换季后等着重画的零件：'格子:零件' → 要画成什么样。每帧画几个，不挤在同一帧里
+    this.dayT = 0;
     this.emitters = [];
     this.sprayers = [];
     this.smokeTimer = 0;
@@ -532,7 +535,7 @@ export class View {
 
   // 世界没变，只是画法变了：照上一次的样子重画一遍
   resync() {
-    if (this.world && this.lastCtx && this.terrain) this.sync(this.world, this.lastCtx, 'instant');
+    if (this.world && this.lastCtx && this.terrain) this.sync(this.world, this.lastCtx, 'season');
   }
 
   resize() {
@@ -614,6 +617,7 @@ export class View {
   // ---------- 昼夜 ----------
 
   setTime(t) {
+    this.dayT = t;
     let i = 0;
     while (i < KEYS.length - 2 && t >= KEYS[i + 1].t) i++;
     const a = KEYS[i];
@@ -733,7 +737,11 @@ export class View {
   // ---------- 零件同步 ----------
 
   // mode：'place' 玩家刚摆放或拆除；'bulk' 撤销、重做、重置；'init' 首次载入；'instant' 整块移动后直接换好
+  // mode：'place' 玩家刚摆了东西；'init' 开局；'bulk' 一大批变化；'instant' 直接换上、不播动画；
+  // 'season' 换季、换画质：世界没变，只是画法变了，旧的先留着，分到后面十来帧里一个个换掉（见 drainStale）
   sync(world, ctx, mode = 'bulk') {
+    const lazy = mode === 'season';
+    if (lazy) mode = 'instant';
     let grown = 0;
     let order = 0;
     this.emitters = [];
@@ -761,6 +769,21 @@ export class View {
             this.addEmitter(group, cur.obj, y);
             continue;
           }
+          const sk = `${idx}:${d.key}`;
+          if (lazy && cur && cur.kind === d.kind) {
+            // 只是换个季节的样子：先记下，稍后再换
+            if (Math.abs(cur.y - y) > 1e-4) {
+              cur.y = y;
+              this.moveTo(cur.obj, y);
+            }
+            this.stale.set(sk, { idx, key: d.key, kind: d.kind, p: d.p, sig, x, z });
+            this.addEmitter(group, cur.obj, y);
+            continue;
+          }
+          // 本来就排着队要换成这个样子的：现在直接换上，不当成新变化来播动画
+          const queued = this.stale.get(sk);
+          const quiet = !!queued && queued.sig === sig;
+          this.stale.delete(sk);
           const obj = buildPart(d.kind, d.p);
           obj.position.y = y;
           obj.userData.phase = (x * 2.399 + z * 3.883) % 6.28; // 摇摆的节拍按位置定：换季重画时树不会突然抖一下
@@ -771,7 +794,7 @@ export class View {
           this.addEmitter(group, obj, y);
           if (cur) {
             this.destroy(cur.obj);
-            if (mode !== 'init' && mode !== 'instant') this.popIn(obj);
+            if (!quiet && mode !== 'init' && mode !== 'instant') this.popIn(obj);
           } else if (mode === 'instant') {
             // 整块移动：东西已经在眼前挪过来了，直接出现，不再播动画
           } else if (mode === 'place' && d.anim === 'drop') {
@@ -797,6 +820,39 @@ export class View {
     return { grown };
   }
 
+  // 把排着队的零件换成新季节的样子。每帧最多花 budget 毫秒，至少换一个
+  drainStale(budget = 3) {
+    if (!this.stale.size) return;
+    const t0 = performance.now();
+    for (const [sk, q] of this.stale) {
+      this.stale.delete(sk);
+      const map = this.parts[q.idx];
+      const cur = map.get(q.key);
+      // 这期间被拆了、换成别的了，或者已经是这个样子了：不用管
+      if (!cur || cur.kind !== q.kind || cur.sig === q.sig) continue;
+      const obj = buildPart(q.kind, q.p);
+      obj.position.y = cur.y;
+      obj.userData.phase = (q.x * 2.399 + q.z * 3.883) % 6.28;
+      obj.rotation.x = cur.obj.rotation.x;
+      obj.rotation.z = cur.obj.rotation.z;
+      this.cellGroups[q.idx].add(obj);
+      this.destroy(cur.obj);
+      map.set(q.key, { obj, sig: q.sig, y: cur.y, kind: q.kind });
+      this.track(obj);
+      if (performance.now() - t0 > budget) break;
+    }
+    // 都换完了：喷泉结没结冰变了，重新数一遍哪里冒烟、哪里喷水
+    if (!this.stale.size) this.refreshEmitters();
+  }
+
+  refreshEmitters() {
+    this.emitters = [];
+    this.sprayers = [];
+    this.parts.forEach((map, idx) => {
+      for (const rec of map.values()) this.addEmitter(this.cellGroups[idx], rec.obj, rec.y);
+    });
+  }
+
   // 烟囱冒烟、喷泉喷水的位置
   addEmitter(group, obj, y) {
     const u = obj.userData;
@@ -820,6 +876,7 @@ export class View {
       if (c.userData.bob) this.bobbers.add(c);
       if (c.userData.spin) this.spinners.add(c);
       if (c.userData.turn) this.turners.add(c);
+      if (c.userData.hand) this.hands.add(c);
     }
   }
 
@@ -830,6 +887,7 @@ export class View {
       this.bobbers.delete(c);
       this.spinners.delete(c);
       this.turners.delete(c);
+      this.hands.delete(c);
       if (c.geometry && !c.userData.shared) c.geometry.dispose();
     }
     if (obj.parent) obj.parent.remove(obj);
@@ -1249,6 +1307,7 @@ export class View {
     mats.puddle.opacity = 0.5 * smooth(0.1, 1, this.puddle);
     if (this.puddles) this.puddles.visible = this.puddle > 0.1;
 
+    this.drainStale();
     for (const o of this.swayers) {
       const ph = o.userData.phase;
       o.rotation.z = Math.sin(this.time * 1.25 + ph) * 0.04;
@@ -1261,6 +1320,13 @@ export class View {
 
     for (const o of this.spinners) o.rotation.z -= dt * o.userData.spin;
     for (const o of this.turners) o.rotation.y += dt * o.userData.turn;
+    if (this.hands.size) {
+      // 钟楼的针指着游戏里的钟点（和右上角显示的时间是同一个算法）
+      const hours = (6 + this.dayT * 24) % 24;
+      const ha = -((hours % 12) / 12) * 6.2832;
+      const ma = -(hours % 1) * 6.2832;
+      for (const o of this.hands) o.rotation.z = o.userData.hand === 'h' ? ha : ma;
+    }
 
     this.sprayTimer -= dt;
     if (this.sprayTimer <= 0) {

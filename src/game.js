@@ -11,6 +11,7 @@ import { UI } from './ui.js';
 import { TRACKS } from './music.js';
 import { sendFeedback } from './feedback.js';
 import { encodeSave, decodeSave } from './savecode.js';
+import { Visitors, cleanGuests } from './visitors.js';
 
 // 测试版用自己的一份存档：里面可能有正式版还不认识的新东西，混着用会把正式版那份弄乱。
 // 第一次打开测试版时，从正式版那份抄一份过来接着玩
@@ -18,7 +19,7 @@ const MAIN_SAVE_KEY = 'qidao-save-v2';
 const BETA = typeof location !== 'undefined' && location.pathname.includes('/beta/');
 const SAVE_KEY = BETA ? 'qidao-save-beta' : MAIN_SAVE_KEY;
 const BETA_MARK = 'qidao-save-beta-init';
-const SAVE_V = 5; // 4：建筑有了墙色和顶色；5：有了小桥、露台、水上小屋这些新组件，旧版本读不了
+const SAVE_V = 6; // 4：建筑有了墙色和顶色；5：有了小桥、露台、水上小屋这些新组件，旧版本读不了；6：有了民宿和旅客
 // 换季：新季节头一天开头的这一段（一天的几分之几，约一分钟）里，颜色从上一季一步步变过来
 const TURN = 0.1;
 const TURN_STEPS = 8;
@@ -50,8 +51,10 @@ function cleanSave(raw) {
       return [b[0], b[1], b[2], b[3]];
     });
     if (s.length > 1 && s.some((b) => own(SOLO, b[0]))) bad();
-    // 露台只能是最上面一层，底下得是房间
-    if (s.some((b, i) => b[0] === 'terrace' && (i !== s.length - 1 || i < 1 || s[i - 1][0] !== 'room'))) bad();
+    // 露台只能是最上面一层，底下得是房间或民宿
+    if (s.some((b, i) => b[0] === 'terrace' && (i !== s.length - 1 || i < 1 || !['room', 'inn'].includes(s[i - 1][0])))) bad();
+    // 民宿底下只能是房间或小店，上面只能是露台
+    if (s.some((b, i) => b[0] === 'inn' && ((i > 0 && !['room', 'shop'].includes(s[i - 1][0])) || (i < s.length - 1 && s[i + 1][0] !== 'terrace')))) bad();
     if (!c[0] && !s.length) return 0;
     if (c[2] === undefined || !s.length) return [c[0], s];
     if (!PAINTS.includes(c[2])) bad();
@@ -70,7 +73,20 @@ function cleanSave(raw) {
     roster.push({ id: r.id, bonus, happy: Number.isFinite(r.happy) && r.happy > 0 ? Math.min(r.happy, 1e6) : 0 });
   }
   const day = Number.isInteger(raw.day) && raw.day > 0 && raw.day < 1e7 ? raw.day : 0;
-  const save = { v: SAVE_V, world: JSON.stringify(world), level: raw.level, t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0, day, roster, done: !!raw.done };
+  const guests = cleanGuests(
+    raw.guests,
+    roster.map((r) => r.id),
+  );
+  const save = {
+    v: SAVE_V,
+    world: JSON.stringify(world),
+    level: raw.level,
+    t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0,
+    day,
+    roster,
+    done: !!raw.done,
+    guests: { list: guests.list, visited: guests.visited, timer: guests.timer },
+  };
   const trial = new World(stageFor(save.level));
   trial.load(save.world); // 真的摆一遍，摆不出来的也不要
   if (!(raw.v >= 4)) {
@@ -83,6 +99,7 @@ const TAP_SLOP = 10; // 触屏上手指挪动不超过这么多像素，还算"�
 const SETTINGS_KEY = 'qidao-settings-v1';
 const MOD = Object.fromEntries(MODULES.map((m) => [m.id, m]));
 const ARRIVE_DELAY = 8; // 所有人都住下之后，过多少秒来下一位
+const TAG_GAP = 32; // 楼上楼下两个住户标签之间至少隔多远（像素）
 const IDEA_DELAY = 45; // 居民住得满意多少秒之后，会冒出一个新想法
 const IDEA_GAP = 20; // 两个新想法之间至少隔多少秒
 // 把一个矩形和里面的点顺时针转 90°（取整的规矩和 world.rotatePairs 一样，连转四次回到原处）
@@ -152,7 +169,7 @@ export class Game {
     this.done = false;
 
     // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
-    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', quality: 'auto', tutorialDone: false, growthTipDone: false };
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', quality: 'auto', tags: false, tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
@@ -242,19 +259,29 @@ export class Game {
       checkImport: (text) => this.checkImport(text),
       applyImport: (text) => this.applyImport(text),
       focusResident: (id) => this.focusResident(id),
+      toggleTags: () => {
+        this.settings.tags = !this.settings.tags;
+        this.ui.setTagsOn(this.settings.tags);
+        this.audio.click();
+        this.ui.toast(t(this.settings.tags ? 'toast.tagsOn' : 'toast.tagsOff'));
+        this.saveSettings();
+      },
       hoverSound: () => this.audio.hover(),
       clickSound: () => this.audio.click(),
+      albumData: () => this.albumData(),
     });
     this.ui.setVolumes(this.settings.music, this.settings.sfx);
     this.ui.setTrack(this.settings.track);
     this.ui.setFpsChoice(this.settings.fps, this.settings.showFps);
     this.ui.setThemeMode(this.settings.theme);
     this.ui.setHand(this.settings.hand);
+    this.ui.setTagsOn(this.settings.tags);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
     this.applyQuality();
     this.ui.showTest(TEST_BUILD);
 
+    this.visitors = new Visitors(this);
     const save = this.loadSave();
     if (!save) {
       this.world = new World(0);
@@ -271,7 +298,9 @@ export class Game {
       }
     }
 
+    this.visitors.restore(save && save.guests);
     this.results = this.evaluate();
+    this.visitors.evaluate('init');
     this.adoptResults();
     this.prosperity = prosperityOf(this.results);
     this.unlocked = unlockedAt(this.level);
@@ -280,7 +309,7 @@ export class Game {
     this.view.sync(this.world, this.ctx(), 'init');
     this.ui.setThumbs(this.view.makeThumbs(Object.fromEntries(MODULES.map((m) => [m.id, thumbParts(m.id)]))));
     this.ui.setUnlocked(this.unlocked);
-    this.ui.setWishes(this.results);
+    this.ui.setWishes(this.cards());
     this.refreshProsperity();
     this.ui.setTool(null);
     this.ui.setUndoState(false, false);
@@ -357,6 +386,7 @@ export class Game {
       day: this.day,
       roster: this.roster.map((r) => ({ id: r.spec.id, bonus: r.bonus, happy: r.happy })),
       done: this.done,
+      guests: this.visitors.snapshot(),
     };
   }
 
@@ -378,7 +408,7 @@ export class Game {
       const first = !this.seasonKey;
       this.seasonKey = key;
       this.view.setSeason((s + 3) % 4, s, step / TURN_STEPS);
-      if (!first) this.view.sync(this.world, this.ctx(), 'instant');
+      if (!first) this.view.sync(this.world, this.ctx(), 'season');
       if (s !== this.season) {
         this.season = s;
         this.ui.setSeason(s);
@@ -393,6 +423,7 @@ export class Game {
     if (wkey !== this.wxKey) {
       this.wxKey = wkey;
       this.view.setWeather(wet && s !== 3, wet && s === 3 ? 'snow' : s === 2 ? 'leaf' : s === 0 ? 'petal' : null, wet);
+      this.audio.setRain(wet && s !== 3); // 下雪没有声音
     }
   }
 
@@ -471,7 +502,8 @@ export class Game {
     this.ui.applyLang();
     this.clockTimer = 0;
     this.results = this.evaluate();
-    this.ui.setWishes(this.results);
+    this.visitors.evaluate('lang');
+    this.ui.setWishes(this.cards());
     this.refreshProsperity();
     this.refreshHover();
   }
@@ -483,6 +515,7 @@ export class Game {
     this.world = new World(0);
     this.world.seedStart();
     for (const r of this.residents) r.dispose();
+    this.visitors.clear();
     this.ui.clearResidents();
     this.roster = [];
     this.residents = [];
@@ -511,6 +544,29 @@ export class Game {
 
   evaluate(world = this.world) {
     return evaluateAll(world, this.roster);
+  }
+
+  // 图鉴：每个人现在是什么状态。res 住在岛上、vis 来做过客并且玩得尽兴、now 正在做客还没尽兴、off 还没见过。
+  // lv：他需要的东西到小岛几级（从 0 数）才全部解锁；locked：现在还没到那一级
+  albumData() {
+    const here = new Set(this.roster.map((r) => r.spec.id));
+    const guests = new Set(this.visitors.guests.map((v) => v.id));
+    return Object.values(ARCHETYPES).map((a) => {
+      const state = here.has(a.id) ? 'res' : this.visitors.visited.has(a.id) ? 'vis' : guests.has(a.id) ? 'now' : 'off';
+      const lv = Math.max(0, ...a.needs.map(unlockLevel));
+      return { id: a.id, look: a.look, name: a.name, wish: a.wish, state, lv, locked: lv > this.level };
+    });
+  }
+
+  // 图鉴里刚点亮了一个人（新居民住下，或旅客头一回玩得尽兴）：提醒一下；集齐了说一声
+  albumAdded() {
+    this.ui.flagAlbum();
+    if (this.albumData().every((p) => p.state === 'res' || p.state === 'vis')) this.ui.toast(t('toast.albumFull'), 7);
+  }
+
+  // 界面上要出卡片的所有人：居民，加上正在岛上做客的旅客
+  cards() {
+    return [...this.results, ...this.visitors.results];
   }
 
   // 记住每位居民现在住在哪，下次评估时同等条件下不搬家
@@ -570,10 +626,8 @@ export class Game {
 
   // 候选居民的先后：需要的模块解锁得越晚，越容易先来，这样新模块很快就有人用得上
   arrivalOrder() {
-    const pool = eligibleIds(
-      this.unlocked,
-      this.roster.map((r) => r.spec.id),
-    ).map((id) => ({ id, w: 1 + 1.5 * Math.max(0, ...ARCHETYPES[id].needs.map(unlockLevel)) }));
+    // 正在岛上做客的旅客不会同时搬来住
+    const pool = eligibleIds(this.unlocked, [...this.roster.map((r) => r.spec.id), ...this.visitors.ids()]).map((id) => ({ id, w: 1 + 1.5 * Math.max(0, ...ARCHETYPES[id].needs.map(unlockLevel)) }));
     const out = [];
     while (pool.length) {
       let roll = Math.random() * pool.reduce((s, o) => s + o.w, 0);
@@ -603,6 +657,7 @@ export class Game {
     const res = this.residents[i];
     this.audio.arrive();
     this.ui.toast(t('toast.arrive', res.def.name), 2.4);
+    if (!this.visitors.visited.has(id)) this.albumAdded();
     // 刚上岛先说自己想要什么；如果正好有现成的地方能住，就说住进去的感受
     res.say(this.results[i].tier >= 1 ? this.results[i].text : res.def.ask, 8);
   }
@@ -824,15 +879,18 @@ export class Game {
       return;
     }
     if (!this.mouse || !this.mouse.inside || !this.started || this.drag) {
+      this.peek = null;
       this.setHover(null);
       return;
     }
     if (this.tool === 'move') {
+      this.peek = null;
       this.setHover(null);
       this.moveHint();
       return;
     }
     const pick = this.view.pick(this.mouse.x, this.mouse.y);
+    this.peek = pick; // 鼠标指着哪一格：那一格里住的人会亮出标签（没选工具时也一样）
     const pk = pick ? `${pick.x},${pick.z},${pick.level},${pick.face}` : '';
     if (pk !== this.pickKey) {
       this.pickKey = pk;
@@ -882,7 +940,7 @@ export class Game {
     const w = this.world.clone();
     this.applyTo(w, h);
     const res = this.evaluate(w);
-    this.ui.setPreview(res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })));
+    this.ui.setPreview([...res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })), ...this.visitors.preview(w)]);
   }
 
   applyTo(w, h) {
@@ -911,6 +969,7 @@ export class Game {
     else if (h.kind === 'paint') this.audio.place(h.level, true);
     else this.audio.remove();
     this.commit('place');
+    if (h.kind === 'place') this.visitors.onBuilt(h.type);
     return true;
   }
 
@@ -1150,13 +1209,14 @@ export class Game {
     const was = this.prosperity;
     if (mode === 'place' || mode === 'move' || mode === 'bulk') this.worldVer++;
     this.results = this.evaluate();
+    this.visitors.evaluate(mode);
     const info = this.view.sync(this.world, this.ctx(), mode === 'bulk' ? 'bulk' : mode === 'move' ? 'instant' : 'place');
     if (mode === 'place' && info.grown > 0) setTimeout(() => this.audio.grow(info.grown), 170);
     // 只有玩家亲手摆放、搬动引起的变化才庆祝或叹气
     if (mode === 'place' || mode === 'move') this.handleWishChanges();
     this.adoptResults();
     this.checkLevel();
-    this.ui.setWishes(this.results);
+    this.ui.setWishes(this.cards());
     this.refreshProsperity();
     // 玩家亲手摆放、拆除、搬动让繁荣度变了：在数字旁边弹一下"+1"（一次满足好几个愿望就是 +2、+3）
     if ((mode === 'place' || mode === 'move') && this.prosperity !== was) this.ui.popProsper(this.prosperity - was);
@@ -1213,7 +1273,10 @@ export class Game {
   // 点居民卡片：镜头移到他的家（没有家就移到本人），并让他再说一遍想法
   focusResident(id) {
     const i = this.roster.findIndex((r) => r.spec.id === id);
-    if (i < 0) return;
+    if (i < 0) {
+      this.visitors.focus(id);
+      return;
+    }
     const res = this.residents[i];
     const r = this.results[i];
     this.audio.click();
@@ -1226,6 +1289,64 @@ export class Game {
     }
     // 住得满意、但还有没实现的新想法时，说新想法
     res.say(r.tier >= 2 && r.bonus && !r.bonus.done ? r.bonus.say : r.text, 5);
+  }
+
+  // ---------- 认房子 ----------
+
+  // 每帧：把住户标签摆到各家房子上。开关开着时全岛都显示；关着时只显示鼠标指着（触屏：瞄准或点中）的那一格里的住户
+  updateTags(dt) {
+    let peek = null;
+    if (this.started) {
+      if (this.touch) {
+        if (this.tapPeekT > 0) this.tapPeekT -= dt;
+        peek = this.tool && this.tool !== 'move' && this.aim ? this.aim : this.tapPeekT > 0 ? this.tapPeek : null;
+      } else if (this.mouse && this.mouse.inside && !this.drag) {
+        peek = this.peek;
+      }
+    }
+    const list = [];
+    const near = [];
+    const stacks = new Map(); // 同一格里住着几户（楼上楼下）："x,z" → 他们的标签
+    if (this.started) {
+      for (const r of this.cards()) {
+        const h = r.home;
+        if (!h) continue;
+        const on = !!peek && peek.x === h.x && peek.z === h.z;
+        if (on) near.push(r.id);
+        if (!on && !this.settings.tags) continue;
+        const p = this.view.project(this.view.cellCenter(h.x, h.z, h.level * H + H * 0.55));
+        const tag = { id: r.id, x: p.x, y: p.y, near: on, level: h.level };
+        list.push(tag);
+        const k = `${h.x},${h.z}`;
+        if (!stacks.has(k)) stacks.set(k, []);
+        stacks.get(k).push(tag);
+      }
+    }
+    // 镜头拉远时，楼上楼下的标签会叠在一起：从上往下排开，每个至少隔开一个头像的距离，整摞仍然对着这座楼的中间
+    for (const s of stacks.values()) {
+      if (s.length < 2) continue;
+      s.sort((a, b) => b.level - a.level);
+      const mid = s.reduce((sum, a) => sum + a.y, 0) / s.length;
+      for (let i = 1; i < s.length; i++) s[i].y = Math.max(s[i].y, s[i - 1].y + TAG_GAP);
+      const shift = mid - s.reduce((sum, a) => sum + a.y, 0) / s.length;
+      for (const a of s) a.y += shift;
+    }
+    this.ui.setTags(list);
+    const key = near.join();
+    if (key !== this.peekKey) {
+      this.peekKey = key;
+      this.ui.setPeek(near, this.touch && !this.tool);
+    }
+  }
+
+  // 触屏上没选工具时点一座房子：亮出住在里面的人，过几秒自己收起
+  peekAt(x, y) {
+    const pick = this.view.pick(x, y);
+    const lived = !!pick && this.cards().some((r) => r.home && r.home.x === pick.x && r.home.z === pick.z);
+    this.tapPeek = lived ? pick : null;
+    this.tapPeekT = lived ? 4 : 0;
+    this.peekKey = null; // 再点同一座也要把卡片滚出来
+    if (lived) this.audio.hover();
   }
 
   // ---------- 输入 ----------
@@ -1333,9 +1454,11 @@ export class Game {
       // 在输入框里打字的时候，不当成游戏的快捷键
       if (!this.started || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const k = e.key.toLowerCase();
-      // 数字键选的是当前这一页里的模块
-      const mod = MODULES.find((m) => m.tab === this.tab && m.key === k);
-      if (mod && !e.ctrlKey && !e.metaKey) {
+      // 数字键选的是当前这一页里的模块：1 到 9 是前九个，按住 Shift 再按数字是第十个往后的
+      const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code || '');
+      const slot = digit ? Number(digit[1]) - 1 + (e.shiftKey ? 9 : 0) : -1;
+      const mod = slot >= 0 ? MODULES.find((m) => m.tab === this.tab && m.slot === slot) : null;
+      if (mod && !e.ctrlKey && !e.metaKey && !e.altKey) {
         this.selectTool(mod.id);
       } else if (k === 'tab') {
         const i = TABS.findIndex((tab) => tab.id === this.tab);
@@ -1472,7 +1595,11 @@ export class Game {
 
   handleTap(x, y) {
     const tool = this.tool;
-    if (!tool || tool === 'move') return;
+    if (!tool) {
+      this.peekAt(x, y);
+      return;
+    }
+    if (tool === 'move') return;
     const pick = this.view.pick(x, y);
     if (!pick) {
       this.cancelAim();
@@ -1581,6 +1708,7 @@ export class Game {
       this.tickIdeas();
     }
     this.residents.forEach((r, i) => r.update(dt, this.world, this.t, this.results[i]));
+    this.visitors.update(dt);
     this.view.update(dt);
 
     this.residents.forEach((r) => {
@@ -1592,6 +1720,8 @@ export class Game {
         this.ui.setBubble(r.def.id, null);
       }
     });
+
+    this.updateTags(dt);
 
     this.ui.setCompass(this.view.az, this.view.sunTheta, this.view.isDay);
     this.clockTimer -= dt;
