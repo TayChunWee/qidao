@@ -1171,18 +1171,22 @@ export function buildResident(def) {
   if (def.hat === 'straw') {
     g.cyl(0.15, 0.15, 0.015, 10, 0, 0.32, 0, C.straw);
     g.cyl(0.07, 0.085, 0.06, 8, 0, 0.33, 0, C.straw);
+    if (def.tint) g.cyl(0.084, 0.09, 0.022, 8, 0, 0.335, 0, def.tint);
+  } else if (def.hat === 'li') {
+    // 斗笠
+    g.cone(0.17, 0.1, 10, 0, 0.305, 0, C.straw);
   } else if (def.hat === 'cone') {
     // 观星人的尖帽
     g.cyl(0.13, 0.13, 0.015, 10, 0, 0.32, 0, def.hair);
     g.cone(0.085, 0.2, 8, 0, 0.33, 0, def.hair);
     g.ball(0.02, 0, 0.53, 0, C.spark);
   } else if (def.hat === 'cap') {
-    g.cyl(0.088, 0.092, 0.045, 10, 0, 0.32, 0, C.metal);
-    g.box(0.12, 0.012, 0.07, 0, 0.32, 0.09, C.metal);
+    g.cyl(0.088, 0.092, 0.045, 10, 0, 0.32, 0, def.tint || C.metal);
+    g.box(0.12, 0.012, 0.07, 0, 0.32, 0.09, def.tint || C.metal);
   } else if (def.hat === 'beret') {
     g.ball(0.088, 0, 0.3, -0.02, def.hair, 1);
-    g.cyl(0.1, 0.08, 0.035, 10, 0.02, 0.345, 0, '#c0504a');
-    g.ball(0.015, 0.02, 0.39, 0, '#c0504a');
+    g.cyl(0.1, 0.08, 0.035, 10, 0.02, 0.345, 0, def.tint || '#c0504a');
+    g.ball(0.015, 0.02, 0.39, 0, def.tint || '#c0504a');
   } else {
     g.ball(0.09, 0, 0.3, -0.025, def.hair, 1);
     if (def.style !== 'short') g.ball(0.045, 0, 0.39, -0.03, def.hair, 0);

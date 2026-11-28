@@ -559,6 +559,7 @@ const keyOf = (h) => `${h.x},${h.z},${h.level}`;
 
 // ---------- 居民模板 ----------
 // recipe(x, z)：在某个空位上最省事的几种盖法，用来在居民到来前确认"岛上盖得出来"
+// look：小人和头像的样子。body 衣服、hair 头发、style 发型、hat 帽子、tint 帽子（草帽是帽带）的颜色
 // 名字和台词在文字表里（res.<id>.name / wish / ask / almost / happy），模板定义完之后统一接上
 
 const around = (x, z, fn) => DIRS.map((d, k) => fn(x + d.x, z + d.z, k));
@@ -577,7 +578,7 @@ export const ARCHETYPES = {
     recipe: balconyRecipe(3),
   },
   mo: {
-    look: { body: '#6f9fc0', hair: '#d9d2c4', hat: 'straw' },
+    look: { body: '#6f9fc0', hair: '#d9d2c4', hat: 'straw', tint: '#4f7fa6' },
     home: 'ground',
     tends: 'garden',
     calm: true,
@@ -628,7 +629,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['tower', x, z], ['tower', x, z], ['tower', x, z]]],
   },
   chao: {
-    look: { body: '#4fa3a0', hair: '#3b2f2a', hat: 'straw' },
+    look: { body: '#4fa3a0', hair: '#3b2f2a', hat: 'straw', tint: '#3b5a7a' },
     home: 'ground',
     needs: ['dock'],
     must: [cond.dock(2)],
@@ -699,7 +700,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z]]],
   },
   shu: {
-    look: { body: '#9a8266', hair: '#e8e2d6', hat: 'beret' },
+    look: { body: '#9a8266', hair: '#e8e2d6', hat: 'beret', tint: '#5f6f4a' },
     home: 'room',
     calm: true,
     needs: ['lamp'],
@@ -729,7 +730,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z]], ...around(x, z, (wx, wz) => [['room', x, z], ['well', wx, wz]])],
   },
   yubo: {
-    look: { body: '#5f7fa8', hair: '#d8d2c6', hat: 'straw' },
+    look: { body: '#5f7fa8', hair: '#d8d2c6', hat: 'li' },
     home: 'balcony',
     perchAt: [0.04, 0.3],
     needs: ['dock', 'lamp'],
@@ -763,7 +764,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z]], ...around(x, z, (mx, mz) => [['room', x, z], ['windmill', mx, mz]])],
   },
   su: {
-    look: { body: '#f3d9c0', hair: '#7a4a34', hat: 'cap' },
+    look: { body: '#f3d9c0', hair: '#7a4a34', hat: 'cap', tint: '#f6f1e6' },
     home: 'overShop',
     loud: true,
     needs: ['shop', 'windmill', 'well'],
@@ -805,7 +806,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z]], ...around(x, z, (px, pz) => [['room', x, z], ['pavilion', px, pz]])],
   },
   fu: {
-    look: { body: '#e39a4f', hair: '#3b2f2a', hat: 'cap' },
+    look: { body: '#e39a4f', hair: '#3b2f2a', hat: 'cap', tint: '#5f8a5a' },
     home: 'room',
     loud: true,
     needs: ['market', 'lamp'],
@@ -815,7 +816,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z]], ...around(x, z, (mx, mz) => [['room', x, z], ['market', mx, mz]])],
   },
   di: {
-    look: { body: '#d98fb0', hair: '#f0e0b8', hat: 'beret' },
+    look: { body: '#d98fb0', hair: '#f0e0b8', hat: 'beret', tint: '#6a5fa8' },
     home: 'balcony',
     calm: true,
     perchAt: [0.36, 0.56],
@@ -826,7 +827,7 @@ export const ARCHETYPES = {
     recipe: balconyRecipe(2),
   },
   deng: {
-    look: { body: '#4f6f8f', hair: '#e8e2d6', hat: 'cap' },
+    look: { body: '#4f6f8f', hair: '#e8e2d6', hat: 'cap', tint: '#2f3a4a' },
     home: 'ground',
     calm: true,
     tall: true,
@@ -839,7 +840,7 @@ export const ARCHETYPES = {
   // ---- 在意颜色的居民（hue：自己对颜色有主意，不会再冒出"想换个墙色"的新想法）。
   // 颜色都不放在必须条件里：颜色不合意也住得下，只是到不了更高的评价 ----
   cai: {
-    look: { body: '#f2a65a', hair: '#4a3a2c', hat: 'beret' },
+    look: { body: '#f2a65a', hair: '#4a3a2c', hat: 'beret', tint: '#3f9f9a' },
     home: 'room',
     hue: true,
     needs: ['paint'],
@@ -870,7 +871,7 @@ export const ARCHETYPES = {
     recipe: balconyRecipe(0),
   },
   lan: {
-    look: { body: '#4f86c6', hair: '#e8e2d6', hat: 'cap' },
+    look: { body: '#4f86c6', hair: '#e8e2d6', hat: 'cap', tint: '#3f6fb0' },
     home: 'ground',
     hue: true,
     needs: ['paint'],
@@ -911,7 +912,7 @@ export const ARCHETYPES = {
     recipe: roadRecipe,
   },
   xin: {
-    look: { body: '#5aa06f', hair: '#3b2f2a', hat: 'cap' },
+    look: { body: '#5aa06f', hair: '#3b2f2a', hat: 'cap', tint: '#2f6f4a' },
     home: 'room',
     needs: ['shop', 'well'],
     must: [cond.road()],
@@ -920,7 +921,7 @@ export const ARCHETYPES = {
     recipe: roadRecipe,
   },
   qiao: {
-    look: { body: '#c98f5a', hair: '#4a3a2c', hat: 'straw' },
+    look: { body: '#c98f5a', hair: '#4a3a2c', hat: 'straw', tint: '#d9503f' },
     home: 'ground',
     needs: ['bridge', 'dock'],
     must: [cond.road()],
@@ -930,7 +931,7 @@ export const ARCHETYPES = {
   },
   // ---- 新组件带来的居民 ----
   guo: {
-    look: { body: '#d9694f', hair: '#6b4a3a', hat: 'straw' },
+    look: { body: '#d9694f', hair: '#6b4a3a', hat: 'straw', tint: '#6f9a5a' },
     home: 'ground',
     needs: ['orchard', 'well'],
     must: [cond.beside('orchard', 1, 'n.guo.one')],
@@ -975,7 +976,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z], ['terrace', x, z]]],
   },
   ting: {
-    look: { body: '#4f9fb0', hair: '#2f3a4a', hat: 'straw' },
+    look: { body: '#4f9fb0', hair: '#2f3a4a', hat: 'straw', tint: '#f4efe2' },
     home: 'stilt',
     needs: ['stilt', 'dock'],
     must: [],
@@ -984,7 +985,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => around(x, z, (sx, sz) => [['stilt', sx, sz]]),
   },
   zhong: {
-    look: { body: '#8c7a5a', hair: '#e8e2d6', hat: 'cap' },
+    look: { body: '#8c7a5a', hair: '#e8e2d6', hat: 'cap', tint: '#6f5a40' },
     home: 'ground',
     needs: ['clock', 'lamp'],
     must: [cond.near('clock', 1, 'n.zhong.clock')],

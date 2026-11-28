@@ -1,5 +1,6 @@
 // 界面层：全部是叠在画布上的普通网页元素。
 import { MODULES, TABS, VERSION, AUTHOR } from './config.js';
+import { avatar } from './avatars.js';
 import { LEVELS, unlockLevel } from './progression.js';
 import { FPS_CHOICES, QUALITY_MODES } from './perf.js';
 import { TRACKS } from './music.js';
@@ -32,13 +33,6 @@ const ICON = {
   leaf: svg('<path d="M5 19c0-8 5-13 14-14 0 9-5 14-14 14z"/><path d="M5 19 13 11"/>'),
   cloud: svg('<path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.3 3.3 0 0 1 17.5 17z"/><path d="M9 20v1M13 20v1M17 20v1"/>'),
 };
-
-// 四档心情 + 难过，对应嘴巴的形状
-const MOUTH = ['M15 26h10', 'M14 25q6 4 12 0', 'M13 24q7 8 14 0', 'M12 23q8 12 16 0z', 'M14 28q6-5 12 0'];
-const face = (mood) =>
-  `<svg viewBox="0 0 40 40"><circle cx="14" cy="17" r="2.3" fill="#4a3a32"/><circle cx="26" cy="17" r="2.3" fill="#4a3a32"/>` +
-  (mood === 3 ? '<circle cx="9" cy="23" r="3" fill="#fff" opacity=".35"/><circle cx="31" cy="23" r="3" fill="#fff" opacity=".35"/>' : '') +
-  `<path d="${MOUTH[mood]}" fill="${mood === 3 ? '#4a3a32' : 'none'}" stroke="#4a3a32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const $ = (s) => document.querySelector(s);
 // 界面的明暗。每一项：样式变量、白天的颜色、夜里的颜色、是不是"字"；写成 rgb 的三个数，中间的过渡现算。
@@ -928,7 +922,7 @@ export class UI {
   setMood(w, mood) {
     if (w.mood === mood) return;
     w.mood = mood;
-    w.el.querySelector('.avatar').innerHTML = face(mood);
+    w.el.querySelector('.avatar').innerHTML = avatar(w.spec.id, w.spec.look, mood);
   }
 
   // 摆放前的预览：这一步会让居民的评价变成什么。preview：[{ id, tier, bonus }]

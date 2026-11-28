@@ -123,7 +123,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 /* 已经满意的居民收成一行 */
 .wish.compact { padding: 7px 14px 7px 10px; align-items: center; }
 .wish.compact .avatar { width: 30px; height: 30px; }
-.wish.compact .avatar svg { width: 24px; height: 24px; }
 .wish.compact .wish-text, .wish.compact .wish-need { display: none; }
 .wish.compact:hover { align-items: flex-start; }
 .wish.compact:hover .wish-text, .wish.compact:hover .wish-need { display: block; }
@@ -132,11 +131,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .avatar {
   flex: none; width: 44px; height: 44px; border-radius: 50%;
-  background: var(--c); display: grid; place-items: center;
+  background: var(--c); display: grid; place-items: center; overflow: hidden;
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.08), 0 2px 6px rgba(90, 60, 40, 0.18);
   transition: transform 0.3s var(--spring);
 }
-.avatar svg { width: 34px; height: 34px; }
+.avatar svg { width: 100%; height: 100%; display: block; }
 .wish.up .avatar { transform: scale(1.12) rotate(-6deg); }
 .wish.down .avatar { transform: scale(0.94) rotate(5deg); }
 
@@ -581,7 +580,6 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
   .wish, .wish.compact { width: var(--wish-w); padding: 7px 12px 7px 10px; gap: 10px; align-items: flex-start; }
   .wish:hover { width: var(--wish-open); }
   .wish .avatar { width: 30px; height: 30px; }
-  .wish .avatar svg { width: 24px; height: 24px; }
   .wish-top { min-height: 30px; }
   .wish-top b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .wish .tier { flex: none; }
@@ -671,7 +669,6 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   }
   #wishes .wish, #wishes .wish.compact { width: auto; flex-direction: column; align-items: center; gap: 4px; padding: 4px 5px 6px; border-radius: 17px; }
   #wishes .avatar { width: 36px; height: 36px; }
-  #wishes .avatar svg { width: 28px; height: 28px; }
   #wishes .wish-body, #wishes .wish-top { display: contents; }
   #wishes .wish-top b, #wishes .tier, #wishes .wish-text, #wishes .wish-need, #wishes .wish-bonus, #wishes .wish-preview { display: none; }
   #wishes .pips { margin: 0; gap: 3px; visibility: visible; }
@@ -762,7 +759,6 @@ body.touch #settings .s-check, body.touch #fps { display: none; }
   body.dock #wishes > * { direction: ltr; }
   body.dock #wishes .wish, body.dock #wishes .wish.compact { gap: 3px; padding: 3px 4px 5px; border-radius: 15px; }
   body.dock #wishes .avatar { width: 30px; height: 30px; }
-  body.dock #wishes .avatar svg { width: 24px; height: 24px; }
   body.dock #wishes .pips i { width: 5px; height: 5px; }
   /* 点头像弹出的愿望在屏幕上方，等级那一排的下面 */
   body.dock #wish-detail { top: 54px; }
