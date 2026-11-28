@@ -1,6 +1,7 @@
 // 居民头像：每人一张用代码画的简笔头像，画在 40×40 的格子里，外面由样式裁成圆形、垫上各人衣服的颜色。
 // 头像很小（手机上只有三十来像素），认人靠的是"颜色 + 轮廓"：帽子、发型的形状要一眼分得开，细节只是点缀。
 // 帽子的种类、头发和帽子的颜色与岛上的小人一致（wishes.js 里的 look），这里只补上小人身上画不出来的东西。
+// 画法是"描边"：每一块实心的颜色外面勾一圈深色的线，像贴纸。勾线不用一块块手写，画完以后由 outline() 统一加。
 import { C } from './config.js';
 
 const INK = '#4a3a32';
@@ -143,9 +144,12 @@ const HAT = {
 // ---------- 配饰 ----------
 // 每样东西画在哪一层：neck 在头后面、肩膀上面；beard 在嘴底下；face 在五官底下；lip 在嘴上面；top 最上面
 
+// 花瓣、辫子这种几块拼成一样东西的，包成一组，勾线时只勾整体的外沿
 const flower = (x, y, r, col, mid = '#f6d86b') =>
-  [0, 72, 144, 216, 288].map((a) => `<circle cx="${x}" cy="${y - r}" r="${r * 0.72}" transform="rotate(${a} ${x} ${y})" fill="${col}"/>`).join('') +
+  `<g fill="${col}">${[0, 72, 144, 216, 288].map((a) => `<circle cx="${x}" cy="${y - r}" r="${r * 0.72}" transform="rotate(${a} ${x} ${y})"/>`).join('')}</g>` +
   `<circle cx="${x}" cy="${y}" r="${r * 0.6}" fill="${mid}"/>`;
+// 嘴上的胡子自己带一圈细一点的勾线（和别处一样粗的话像两片嘴唇）
+const LIP = `stroke="${INK}" stroke-width="1.5" stroke-linejoin="round" paint-order="stroke"`;
 
 const EXTRA = {
   blush: () => ['face', '<circle cx="12.5" cy="28.3" r="2.3" fill="#f0806a" opacity=".42"/><circle cx="27.5" cy="28.3" r="2.3" fill="#f0806a" opacity=".42"/>'],
@@ -162,11 +166,11 @@ const EXTRA = {
       line('M18.9 23.4h2.2M12.3 23.2L9 22.4M27.7 23.2L31 22.4', INK, 1) +
       line('M13.6 23.2l1.4-1.2M22.4 23.2l1.4-1.2', '#fff', 0.6),
   ],
-  // 胡子都用头发的颜色。嘴上的胡子描一圈肤色的边，张嘴大笑时才不会和嘴糊成一片
-  stache: (l) => ['lip', `<path d="M20 27.6Q17.6 25.7 13.4 28.2Q17 29.8 20 28.5Q23 29.8 26.6 28.2Q22.4 25.7 20 27.6Z" fill="${l.hair}" stroke="${C.skin}" stroke-width=".7"/>`],
+  // 胡子都用头发的颜色
+  stache: (l) => ['lip', `<path d="M20 27.6Q17.6 25.7 13.4 28.2Q17 29.8 20 28.5Q23 29.8 26.6 28.2Q22.4 25.7 20 27.6Z" fill="${l.hair}" ${LIP}/>`],
   walrus: (l) => [
     'lip',
-    `<path d="M20 27.4Q16.4 25.3 12.4 27.9Q12.8 32.7 15.4 32.9Q17.2 29.9 20 28.9Q22.8 29.9 24.6 32.9Q27.2 32.7 27.6 27.9Q23.6 25.3 20 27.4Z" fill="${l.hair}" stroke="${C.skin}" stroke-width=".7"/>` +
+    `<path d="M20 27.4Q16.4 25.3 12.4 27.9Q12.8 32.7 15.4 32.9Q17.2 29.9 20 28.9Q22.8 29.9 24.6 32.9Q27.2 32.7 27.6 27.9Q23.6 25.3 20 27.4Z" fill="${l.hair}" ${LIP}/>` +
       line('M20 27.6V28.8', dark(l.hair, 0.14), 0.5),
   ],
   beard: (l) => ['beard', `<path d="M8.6 26.4Q8.4 39 20 39Q31.6 39 31.4 26.4Q29.6 33.5 20 33.9Q10.4 33.5 8.6 26.4Z" fill="${l.hair}"/>`],
@@ -240,7 +244,7 @@ const EXTRA = {
     [8.4, 31.6]
       .map(
         (x) =>
-          [27.6, 31, 34.4].map((y) => `<ellipse cx="${x}" cy="${y}" rx="2.6" ry="2.3" fill="${l.hair}"/>`).join('') +
+          `<g fill="${l.hair}">${[27.6, 31, 34.4].map((y) => `<ellipse cx="${x}" cy="${y}" rx="2.6" ry="2.3"/>`).join('')}</g>` +
           line(`M${x - 1.6} 29.3h3.2M${x - 1.6} 32.7h3.2`, dark(l.hair, 0.2), 0.5) +
           `<circle cx="${x}" cy="36.9" r="1.5" fill="${RED}"/>`,
       )
@@ -296,6 +300,59 @@ const WHO = {
   zhong: { x: ['goatee', 'glasses'] },
 };
 
+// ---------- 勾线 ----------
+
+// 把一串图形拆成最外层的一个个元素（除了 <g>…</g>，别的都是自己收尾的单个标签）
+function pieces(svg) {
+  const out = [];
+  let i = 0;
+  while (i < svg.length) {
+    let end;
+    if (svg.startsWith('<g', i)) {
+      let depth = 1;
+      end = i + 2;
+      while (depth) {
+        const open = svg.indexOf('<g', end);
+        const close = svg.indexOf('</g>', end);
+        if (open !== -1 && open < close) {
+          depth++;
+          end = open + 2;
+        } else {
+          depth--;
+          end = close + 4;
+        }
+      }
+    } else end = svg.indexOf('>', i) + 1;
+    out.push(svg.slice(i, end));
+    i = end;
+  }
+  return out;
+}
+
+const attr = (tag, name) => (new RegExp(` ${name}="([^"]+)"`).exec(tag) || [])[1];
+const EDGE = ` stroke="${INK}" stroke-width="2.6" stroke-linejoin="round"`;
+
+// 给每一块实心的颜色垫一个加粗的深色底，露出来的那一圈就是勾线；当成形状用的粗线也一样垫一条。
+// 不勾的：半透明的影子和腮红、自己已经带边的（眼镜、泳镜、嘴上的胡子）、很小的圆点、细的装饰线。
+function outline(svg) {
+  return pieces(svg)
+    .map((el) => {
+      const tag = el.slice(0, el.indexOf('>') + 1);
+      const fill = attr(tag, 'fill');
+      const stroke = attr(tag, 'stroke');
+      if (fill === 'none') {
+        const w = attr(tag, 'stroke-width');
+        if (!stroke || stroke === INK || stroke.startsWith('rgba') || !(+w >= 1.2)) return el;
+        return el.replace(`stroke="${stroke}"`, `stroke="${INK}"`).replace(`stroke-width="${w}"`, `stroke-width="${+w + 2}"`) + el;
+      }
+      if (!fill || fill.startsWith('rgba') || stroke || attr(tag, 'opacity')) return el;
+      if (el.startsWith('<circle') && +attr(tag, 'r') < 1.2) return el;
+      const at = tag.length - (el.startsWith('<g') ? 1 : 2);
+      return el.slice(0, at) + EDGE + el.slice(at) + el;
+    })
+    .join('');
+}
+
 // 一张头像。look：wishes.js 里这位居民的样子（衣服、头发的颜色，帽子）；mood：0 到 3 是四档评价
 export function avatar(id, look, mood = 1) {
   const s = WHO[id] || { hair: 'crop' };
@@ -308,21 +365,24 @@ export function avatar(id, look, mood = 1) {
   }
   return (
     `<svg viewBox="0 0 40 40">` +
-    (s.back ? BACK[s.back](h, s) : '') +
-    // 肩膀、衣领、下巴底下的影子
-    `<path d="M2 41Q3.4 31 20 31Q36.6 31 38 41Z" fill="rgba(60,36,28,.17)"/>` +
-    line('M13.6 33.4Q20 40.6 26.4 33.4', 'rgba(255,255,255,.34)', 1.2) +
-    `<ellipse cx="20" cy="36.2" rx="7.4" ry="1.7" fill="rgba(60,36,28,.16)"/>` +
-    layer.neck +
-    `<circle cx="8.7" cy="25.6" r="2.1" fill="${dark(C.skin, 0.07)}"/><circle cx="31.3" cy="25.6" r="2.1" fill="${dark(C.skin, 0.07)}"/>` +
-    `<circle cx="20" cy="24.5" r="11.5" fill="${C.skin}" stroke="rgba(74,58,50,.3)" stroke-width=".6"/>` +
-    layer.beard +
-    layer.face +
-    line('M19.2 26.1q.8.9 1.6 0', dark(C.skin, 0.24), 0.7) +
-    face(mood, x.includes('stache') || x.includes('walrus') ? 1.8 : 0) +
-    layer.lip +
-    (look.hat ? HAIR.sides(h) + HAT[look.hat](look) : HAIR[s.hair || 'crop'](h, s)) +
-    layer.top +
+    outline(
+      (s.back ? BACK[s.back](h, s) : '') +
+      // 肩膀、衣领、下巴底下的影子
+      `<path d="M2 41Q3.4 31 20 31Q36.6 31 38 41Z" fill="rgba(60,36,28,.17)"/>` +
+      line('M2 41Q3.4 31 20 31Q36.6 31 38 41', INK, 1.3) +
+      line('M13.6 33.4Q20 40.6 26.4 33.4', 'rgba(255,255,255,.34)', 1.2) +
+      `<ellipse cx="20" cy="36.2" rx="7.4" ry="1.7" fill="rgba(60,36,28,.16)"/>` +
+      layer.neck +
+      `<circle cx="8.7" cy="25.6" r="2.1" fill="${dark(C.skin, 0.07)}"/><circle cx="31.3" cy="25.6" r="2.1" fill="${dark(C.skin, 0.07)}"/>` +
+      `<circle cx="20" cy="24.5" r="11.5" fill="${C.skin}"/>` +
+      layer.beard +
+      layer.face +
+      line('M19.2 26.1q.8.9 1.6 0', dark(C.skin, 0.24), 0.7) +
+      face(mood, x.includes('stache') || x.includes('walrus') ? 1.8 : 0) +
+      layer.lip +
+      (look.hat ? HAIR.sides(h) + HAT[look.hat](look) : HAIR[s.hair || 'crop'](h, s)) +
+      layer.top,
+    ) +
     `</svg>`
   );
 }
