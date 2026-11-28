@@ -128,6 +128,7 @@ export class Resident {
     this.walkPhase = Math.random() * 6;
     this.homeKey = '';
     this.bubble = null;
+    this.bound = false; // 被叫去某个地方（旅客上船）：到了就站着等，不再自己拿主意
   }
 
   say(text, seconds = 5) {
@@ -172,7 +173,7 @@ export class Resident {
 
     if (this.state === 'idle') {
       this.timer -= dt;
-      if (this.timer <= 0) this.decide(w, ph, res, hk);
+      if (this.timer <= 0 && !this.bound) this.decide(w, ph, res, hk);
     } else if (this.state === 'walk') {
       this.walk(dt, w, res, hk);
     } else if (this.state === 'tend') {
@@ -242,6 +243,19 @@ export class Resident {
     const path = bfs(w, this.x, this.z, (x, z) => x === goal.x && z === goal.z);
     if (path) this.go(path, null);
     else this.timer = 1.5;
+  }
+
+  // 被叫去某一格：先从屋里出来，再一路走过去，到了就站着等。走不到返回 false
+  headTo(w, x, z) {
+    if (this.state === 'inside' || this.state === 'perch') this.leaveHome(w);
+    this.bound = true;
+    this.path = [];
+    this.state = 'idle';
+    if (this.x === x && this.z === z) return true;
+    const path = bfs(w, this.x, this.z, (px, pz) => px === x && pz === z);
+    if (!path) return false;
+    this.go(path, null);
+    return true;
   }
 
   go(path, after) {

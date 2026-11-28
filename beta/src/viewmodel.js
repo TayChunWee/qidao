@@ -66,7 +66,9 @@ export function describeCell(w, x, z, ctx = {}) {
     const b = c.s[i];
     const y = i * H;
     // 露台的矮墙跟着楼下那间房的墙色走
-    const body = b.t === 'room' ? { tone, c: b.c || 0 } : b.t === 'tower' ? { lv: i % 2 } : b.t === 'terrace' ? { tone, c: c.s[i - 1].c || 0 } : { d: b.d };
+    // 民宿在楼上时正面不开门，只挂招牌
+    const body =
+      b.t === 'room' ? { tone, c: b.c || 0 } : b.t === 'tower' ? { lv: i % 2 } : b.t === 'terrace' ? { tone, c: c.s[i - 1].c || 0 } : b.t === 'inn' ? { d: b.d, up: i > 0 ? 1 : 0 } : { d: b.d };
     parts.push({ key: `b${i}`, kind: b.t, p: body, y, anim: 'drop', fall: i === 0 });
 
     const g = hash(x, z, i) % 3; // 同一间房的窗户一起亮
@@ -103,6 +105,8 @@ export function describeCell(w, x, z, ctx = {}) {
     });
   } else if (top.t === 'tower') {
     parts.push({ key: 'roof', kind: 'cone', p: {}, y: n * H, anim: 'grow' });
+  } else if (top.t === 'inn') {
+    parts.push({ key: 'roof', kind: 'innroof', p: {}, y: n * H, anim: 'grow' });
   } else if (top.t === 'terrace') {
     // 露台自己就是顶，不再盖屋顶
   } else {
@@ -192,6 +196,11 @@ export function thumbParts(id) {
         { kind: 'library', p: { d: 2 } },
         { kind: 'flat', p: { t: 'library' }, y: H },
       ];
+    case 'inn':
+      return [
+        { kind: 'inn', p: { d: 2, up: 0 } },
+        { kind: 'innroof', p: {}, y: H },
+      ];
     case 'terrace':
       return [
         { kind: 'room', p: { tone: 0 } },
@@ -245,6 +254,8 @@ export function ghostParts(id) {
     case 'clock':
     case 'library':
       return [{ kind: id, p: { d: 2 } }];
+    case 'inn':
+      return [{ kind: 'inn', p: { d: 2, up: 0 } }];
     case 'terrace':
       return [{ kind: 'terrace', p: { tone: 0, c: 0 } }];
     case 'bridge':

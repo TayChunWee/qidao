@@ -16,7 +16,7 @@ export const LEVELS = [
   { need: 16, cap: 9, unlock: ['workshop', 'windmill', 'orchard'] },
   { need: 20, cap: 12, stage: 2, unlock: ['greenhouse', 'pavilion', 'library'] },
   { need: 27, cap: 14, unlock: ['market', 'fountain'] },
-  { need: 33, cap: 17, stage: 3, unlock: ['lighthouse'] },
+  { need: 33, cap: 17, stage: 3, unlock: ['lighthouse', 'inn'] },
   { need: 41, cap: 21, unlock: ['stilt', 'terrace'] },
   { need: 50, cap: 24, final: true, unlock: ['clock'] },
 ];

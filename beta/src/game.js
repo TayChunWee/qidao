@@ -11,6 +11,7 @@ import { UI } from './ui.js';
 import { TRACKS } from './music.js';
 import { sendFeedback } from './feedback.js';
 import { encodeSave, decodeSave } from './savecode.js';
+import { Visitors, cleanGuests } from './visitors.js';
 
 // 测试版用自己的一份存档：里面可能有正式版还不认识的新东西，混着用会把正式版那份弄乱。
 // 第一次打开测试版时，从正式版那份抄一份过来接着玩
@@ -18,7 +19,7 @@ const MAIN_SAVE_KEY = 'qidao-save-v2';
 const BETA = typeof location !== 'undefined' && location.pathname.includes('/beta/');
 const SAVE_KEY = BETA ? 'qidao-save-beta' : MAIN_SAVE_KEY;
 const BETA_MARK = 'qidao-save-beta-init';
-const SAVE_V = 5; // 4：建筑有了墙色和顶色；5：有了小桥、露台、水上小屋这些新组件，旧版本读不了
+const SAVE_V = 6; // 4：建筑有了墙色和顶色；5：有了小桥、露台、水上小屋这些新组件，旧版本读不了；6：有了民宿和旅客
 // 换季：新季节头一天开头的这一段（一天的几分之几，约一分钟）里，颜色从上一季一步步变过来
 const TURN = 0.1;
 const TURN_STEPS = 8;
@@ -50,8 +51,10 @@ function cleanSave(raw) {
       return [b[0], b[1], b[2], b[3]];
     });
     if (s.length > 1 && s.some((b) => own(SOLO, b[0]))) bad();
-    // 露台只能是最上面一层，底下得是房间
-    if (s.some((b, i) => b[0] === 'terrace' && (i !== s.length - 1 || i < 1 || s[i - 1][0] !== 'room'))) bad();
+    // 露台只能是最上面一层，底下得是房间或民宿
+    if (s.some((b, i) => b[0] === 'terrace' && (i !== s.length - 1 || i < 1 || !['room', 'inn'].includes(s[i - 1][0])))) bad();
+    // 民宿底下只能是房间或小店，上面只能是露台
+    if (s.some((b, i) => b[0] === 'inn' && ((i > 0 && !['room', 'shop'].includes(s[i - 1][0])) || (i < s.length - 1 && s[i + 1][0] !== 'terrace')))) bad();
     if (!c[0] && !s.length) return 0;
     if (c[2] === undefined || !s.length) return [c[0], s];
     if (!PAINTS.includes(c[2])) bad();
@@ -70,7 +73,20 @@ function cleanSave(raw) {
     roster.push({ id: r.id, bonus, happy: Number.isFinite(r.happy) && r.happy > 0 ? Math.min(r.happy, 1e6) : 0 });
   }
   const day = Number.isInteger(raw.day) && raw.day > 0 && raw.day < 1e7 ? raw.day : 0;
-  const save = { v: SAVE_V, world: JSON.stringify(world), level: raw.level, t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0, day, roster, done: !!raw.done };
+  const guests = cleanGuests(
+    raw.guests,
+    roster.map((r) => r.id),
+  );
+  const save = {
+    v: SAVE_V,
+    world: JSON.stringify(world),
+    level: raw.level,
+    t: Number.isFinite(raw.t) && raw.t > 0 ? raw.t : 0,
+    day,
+    roster,
+    done: !!raw.done,
+    guests: { list: guests.list, visited: guests.visited, timer: guests.timer },
+  };
   const trial = new World(stageFor(save.level));
   trial.load(save.world); // 真的摆一遍，摆不出来的也不要
   if (!(raw.v >= 4)) {
@@ -264,6 +280,7 @@ export class Game {
     this.applyQuality();
     this.ui.showTest(TEST_BUILD);
 
+    this.visitors = new Visitors(this);
     const save = this.loadSave();
     if (!save) {
       this.world = new World(0);
@@ -280,7 +297,9 @@ export class Game {
       }
     }
 
+    this.visitors.restore(save && save.guests);
     this.results = this.evaluate();
+    this.visitors.evaluate('init');
     this.adoptResults();
     this.prosperity = prosperityOf(this.results);
     this.unlocked = unlockedAt(this.level);
@@ -289,7 +308,7 @@ export class Game {
     this.view.sync(this.world, this.ctx(), 'init');
     this.ui.setThumbs(this.view.makeThumbs(Object.fromEntries(MODULES.map((m) => [m.id, thumbParts(m.id)]))));
     this.ui.setUnlocked(this.unlocked);
-    this.ui.setWishes(this.results);
+    this.ui.setWishes(this.cards());
     this.refreshProsperity();
     this.ui.setTool(null);
     this.ui.setUndoState(false, false);
@@ -366,6 +385,7 @@ export class Game {
       day: this.day,
       roster: this.roster.map((r) => ({ id: r.spec.id, bonus: r.bonus, happy: r.happy })),
       done: this.done,
+      guests: this.visitors.snapshot(),
     };
   }
 
@@ -481,7 +501,8 @@ export class Game {
     this.ui.applyLang();
     this.clockTimer = 0;
     this.results = this.evaluate();
-    this.ui.setWishes(this.results);
+    this.visitors.evaluate('lang');
+    this.ui.setWishes(this.cards());
     this.refreshProsperity();
     this.refreshHover();
   }
@@ -493,6 +514,7 @@ export class Game {
     this.world = new World(0);
     this.world.seedStart();
     for (const r of this.residents) r.dispose();
+    this.visitors.clear();
     this.ui.clearResidents();
     this.roster = [];
     this.residents = [];
@@ -521,6 +543,11 @@ export class Game {
 
   evaluate(world = this.world) {
     return evaluateAll(world, this.roster);
+  }
+
+  // 界面上要出卡片的所有人：居民，加上正在岛上做客的旅客
+  cards() {
+    return [...this.results, ...this.visitors.results];
   }
 
   // 记住每位居民现在住在哪，下次评估时同等条件下不搬家
@@ -580,10 +607,8 @@ export class Game {
 
   // 候选居民的先后：需要的模块解锁得越晚，越容易先来，这样新模块很快就有人用得上
   arrivalOrder() {
-    const pool = eligibleIds(
-      this.unlocked,
-      this.roster.map((r) => r.spec.id),
-    ).map((id) => ({ id, w: 1 + 1.5 * Math.max(0, ...ARCHETYPES[id].needs.map(unlockLevel)) }));
+    // 正在岛上做客的旅客不会同时搬来住
+    const pool = eligibleIds(this.unlocked, [...this.roster.map((r) => r.spec.id), ...this.visitors.ids()]).map((id) => ({ id, w: 1 + 1.5 * Math.max(0, ...ARCHETYPES[id].needs.map(unlockLevel)) }));
     const out = [];
     while (pool.length) {
       let roll = Math.random() * pool.reduce((s, o) => s + o.w, 0);
@@ -895,7 +920,7 @@ export class Game {
     const w = this.world.clone();
     this.applyTo(w, h);
     const res = this.evaluate(w);
-    this.ui.setPreview(res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })));
+    this.ui.setPreview([...res.map((r) => ({ id: r.id, tier: r.tier, bonus: !!(r.bonus && r.bonus.done) })), ...this.visitors.preview(w)]);
   }
 
   applyTo(w, h) {
@@ -924,6 +949,7 @@ export class Game {
     else if (h.kind === 'paint') this.audio.place(h.level, true);
     else this.audio.remove();
     this.commit('place');
+    if (h.kind === 'place') this.visitors.onBuilt(h.type);
     return true;
   }
 
@@ -1163,13 +1189,14 @@ export class Game {
     const was = this.prosperity;
     if (mode === 'place' || mode === 'move' || mode === 'bulk') this.worldVer++;
     this.results = this.evaluate();
+    this.visitors.evaluate(mode);
     const info = this.view.sync(this.world, this.ctx(), mode === 'bulk' ? 'bulk' : mode === 'move' ? 'instant' : 'place');
     if (mode === 'place' && info.grown > 0) setTimeout(() => this.audio.grow(info.grown), 170);
     // 只有玩家亲手摆放、搬动引起的变化才庆祝或叹气
     if (mode === 'place' || mode === 'move') this.handleWishChanges();
     this.adoptResults();
     this.checkLevel();
-    this.ui.setWishes(this.results);
+    this.ui.setWishes(this.cards());
     this.refreshProsperity();
     // 玩家亲手摆放、拆除、搬动让繁荣度变了：在数字旁边弹一下"+1"（一次满足好几个愿望就是 +2、+3）
     if ((mode === 'place' || mode === 'move') && this.prosperity !== was) this.ui.popProsper(this.prosperity - was);
@@ -1226,7 +1253,10 @@ export class Game {
   // 点居民卡片：镜头移到他的家（没有家就移到本人），并让他再说一遍想法
   focusResident(id) {
     const i = this.roster.findIndex((r) => r.spec.id === id);
-    if (i < 0) return;
+    if (i < 0) {
+      this.visitors.focus(id);
+      return;
+    }
     const res = this.residents[i];
     const r = this.results[i];
     this.audio.click();
@@ -1258,7 +1288,7 @@ export class Game {
     const near = [];
     const stacks = new Map(); // 同一格里住着几户（楼上楼下）："x,z" → 他们的标签
     if (this.started) {
-      for (const r of this.results) {
+      for (const r of this.cards()) {
         const h = r.home;
         if (!h) continue;
         const on = !!peek && peek.x === h.x && peek.z === h.z;
@@ -1292,7 +1322,7 @@ export class Game {
   // 触屏上没选工具时点一座房子：亮出住在里面的人，过几秒自己收起
   peekAt(x, y) {
     const pick = this.view.pick(x, y);
-    const lived = !!pick && this.results.some((r) => r.home && r.home.x === pick.x && r.home.z === pick.z);
+    const lived = !!pick && this.cards().some((r) => r.home && r.home.x === pick.x && r.home.z === pick.z);
     this.tapPeek = lived ? pick : null;
     this.tapPeekT = lived ? 4 : 0;
     this.peekKey = null; // 再点同一座也要把卡片滚出来
@@ -1658,6 +1688,7 @@ export class Game {
       this.tickIdeas();
     }
     this.residents.forEach((r, i) => r.update(dt, this.world, this.t, this.results[i]));
+    this.visitors.update(dt);
     this.view.update(dt);
 
     this.residents.forEach((r) => {

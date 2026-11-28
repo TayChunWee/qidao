@@ -4,7 +4,10 @@ import { t } from './i18n.js';
 
 // 可以叠高的实体块；SOLO 是独立的一座，只能建在地面，上面不能再盖（值是它相当于几层楼高）
 // 露台是盖在房间顶上的一层：上面不能再盖，这栋楼也就没有坡屋顶了
-export const STACKS = ['room', 'shop', 'workshop', 'tower', 'library', 'terrace'];
+// 民宿是给坐船来的旅客住的客房：盖在地面，或者房间、小店的楼上；它上面只能再盖露台；全岛最多 INN_MAX 间
+export const STACKS = ['room', 'shop', 'workshop', 'tower', 'library', 'terrace', 'inn'];
+export const INN_MAX = 3;
+const INN_BASE = ['room', 'shop'];
 export const SOLO = { windmill: 2, greenhouse: 1, market: 1, lighthouse: 3, stilt: 1, clock: 3 };
 export const SOLIDS = [...STACKS, ...Object.keys(SOLO)];
 export const GROUNDS = ['road', 'garden', 'tree', 'lamp', 'dock', 'well', 'field', 'pavilion', 'fountain', 'bridge', 'orchard'];
@@ -13,7 +16,7 @@ export const AFLOAT = ['dock', 'bridge', 'stilt'];
 // 能走的路：路和小桥。门朝着它开，"顺着路能走到哪儿"也按它算
 export const PATHS = ['road', 'bridge'];
 // 朝向固定、正面有门的底层建筑
-const FACED = ['shop', 'workshop', 'windmill', 'greenhouse', 'market', 'library'];
+const FACED = ['shop', 'workshop', 'windmill', 'greenhouse', 'market', 'library', 'inn'];
 // 只能开在底层的
 const GROUND_FLOOR = ['shop', 'workshop', 'library'];
 const isPath = (c) => !!c && !!c.g && PATHS.includes(c.g.t);
@@ -139,10 +142,15 @@ export class World {
     const level = c.s.length;
     if (level && SOLO[c.s[0].t]) return fail(t('why.soloTop', c.s[0].t));
     if (level && c.s[level - 1].t === 'terrace') return fail(t('why.soloTop', 'terrace'));
+    if (level && c.s[level - 1].t === 'inn' && type !== 'terrace') return fail(t('why.innTop'));
     if (level >= MAX_LEVEL) return fail(t('why.maxHeight'));
     if (SOLO[type] && level > 0) return fail(t('why.soloGround', type));
     if (GROUND_FLOOR.includes(type) && level > 0) return fail(t('why.groundFloor', type));
-    if (type === 'terrace' && (level < 1 || c.s[level - 1].t !== 'room')) return fail(t('why.terraceRoom'));
+    if (type === 'inn') {
+      if (level > 0 && !INN_BASE.includes(c.s[level - 1].t)) return fail(t('why.innBase'));
+      if (this.inns().length >= INN_MAX) return fail(t('why.innMax', INN_MAX));
+    }
+    if (type === 'terrace' && (level < 1 || !['room', 'inn'].includes(c.s[level - 1].t))) return fail(t('why.terraceRoom'));
     if (type === 'lighthouse' && !this.near(x, z, 1, (n) => n.water)) return fail(t('why.lighthouseWater'));
     const top = level + (SOLO[type] || 1);
     for (let d = 0; d < 4; d++) {
@@ -462,6 +470,19 @@ export class World {
       }
     }
     return false;
+  }
+
+  // 岛上所有的民宿：[{ x, z, level }]
+  inns() {
+    const out = [];
+    for (let z = 0; z < SIZE; z++) {
+      for (let x = 0; x < SIZE; x++) {
+        this.cell(x, z).s.forEach((b, level) => {
+          if (b.t === 'inn') out.push({ x, z, level });
+        });
+      }
+    }
+    return out;
   }
 
   // 建造规模，用来决定音乐的丰富程度

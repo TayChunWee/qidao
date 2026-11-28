@@ -524,7 +524,7 @@ export class UI {
       return;
     }
     const has = (c) => (w.el.classList.contains(c) ? ` ${c}` : '');
-    box.className = `panel${has('has-bonus')}${has('bonus-done')}${has('up')}${has('down')}${box.classList.contains('fade') ? ' fade' : ''}`;
+    box.className = `panel${has('guest')}${has('has-bonus')}${has('bonus-done')}${has('up')}${has('down')}${box.classList.contains('fade') ? ' fade' : ''}`;
     box.innerHTML = '';
     box.appendChild(w.el.querySelector('.wish-body').cloneNode(true));
     box.hidden = false;
@@ -867,7 +867,7 @@ export class UI {
   // spec：wishes.js 里的居民模板。animate：新来的居民卡片会滑进来
   addResident(spec, animate) {
     const el = document.createElement('button');
-    el.className = `wish${animate ? ' enter' : ''}`;
+    el.className = `wish${spec.guest ? ' guest' : ''}${animate ? ' enter' : ''}`;
     el.innerHTML =
       `<div class="avatar" style="--c:${spec.look.body}"></div>` +
       `<div class="wish-body"><div class="wish-top"><b>${spec.name}</b><span class="tier"></span><span class="pips"><i></i><i></i><i></i><i class="star"></i></span></div>` +
@@ -879,12 +879,26 @@ export class UI {
     // 单手版式里那行"居民数"不在这个盒子里
     if (this.arrival.parentNode === this.wishBox) this.wishBox.insertBefore(el, this.arrival);
     else this.wishBox.appendChild(el);
-    this.wishEls.set(spec.id, { el, spec, mood: -1, tier: 0, bonus: false });
+    this.wishEls.set(spec.id, { el, spec, mood: -1, tier: 0, bonus: false, guest: !!spec.guest });
     const b = document.createElement('div');
     b.className = 'bubble';
     $('#bubbles').appendChild(b);
     this.bubbleEls.set(spec.id, { el: b, text: '', shown: '', spec });
     if (animate) requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  }
+
+  // 一位旅客走了：卡片、气泡、房子上的标签都收掉
+  removeResident(id) {
+    const w = this.wishEls.get(id);
+    if (w) w.el.remove();
+    const b = this.bubbleEls.get(id);
+    if (b) b.el.remove();
+    const g = this.tagEls.get(id);
+    if (g) g.el.remove();
+    this.wishEls.delete(id);
+    this.bubbleEls.delete(id);
+    this.tagEls.delete(id);
+    if (this.openWishId === id) this.openWish(null);
   }
 
   clearResidents() {
@@ -906,14 +920,16 @@ export class UI {
       const el = w.el;
       // 已经满意的居民收成一行，鼠标移上去再展开；还需要照顾的排在前面
       el.classList.toggle('compact', r.tier >= 2);
-      el.style.order = r.tier < 2 ? 0 : r.bonus && !r.bonus.done ? 1 : 2;
-      el.querySelector('.tier').textContent = t('tier', r.tier);
+      // 旅客排在最前面。他们只有两个心愿，卡片上写"旅客"，表情比如愿的个数高一档（刚到时也是笑着的）
+      el.style.order = r.guest ? -1 : r.tier < 2 ? 0 : r.bonus && !r.bonus.done ? 1 : 2;
+      el.querySelector('.tier').textContent = r.guest ? t('g.tag') : t('tier', r.tier);
+      if (r.guest) el.querySelector('.wish-text').textContent = r.wish;
       el.querySelectorAll('.pips i').forEach((p, i) => p.classList.toggle('on', i < 3 ? i < r.tier : w.bonus));
       el.querySelector('.wish-need').innerHTML = r.need.map((n) => `<span>${n}</span>`).join('');
       el.classList.toggle('has-bonus', !!r.bonus);
       el.classList.toggle('bonus-done', w.bonus);
       el.querySelector('.wish-bonus').innerHTML = r.bonus ? `<em>${t(w.bonus ? 'wish.bonusDone' : 'wish.bonus')}</em>${r.bonus.text}` : '';
-      this.setMood(w, r.tier);
+      this.setMood(w, r.tier + (r.guest ? 1 : 0));
     }
     this.renderWishDetail();
   }
@@ -942,13 +958,13 @@ export class UI {
       w.el.classList.toggle('down', delta < 0 || bonus < 0);
       const tag = w.el.querySelector('.wish-preview');
       if (delta) {
-        tag.textContent = t(delta > 0 ? 'preview.up' : 'preview.down', t('tier', p.tier));
-        this.setMood(w, delta < 0 ? 4 : p.tier);
+        tag.textContent = t(delta > 0 ? 'preview.up' : 'preview.down', t(w.guest ? 'g.tier' : 'tier', p.tier));
+        this.setMood(w, delta < 0 ? 4 : p.tier + (w.guest ? 1 : 0));
       } else if (bonus) {
         tag.textContent = t(bonus > 0 ? 'preview.bonusUp' : 'preview.bonusDown');
         this.setMood(w, bonus < 0 ? 4 : 3);
       } else {
-        this.setMood(w, w.tier);
+        this.setMood(w, w.tier + (w.guest ? 1 : 0));
       }
     }
     if (this.openWishId) this.renderWishDetail();

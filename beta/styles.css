@@ -497,6 +497,12 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
 .tag b { display: none; padding: 2px 9px; border-radius: 11px; background: rgb(var(--paper-rgb)); box-shadow: 0 3px 10px rgba(90, 60, 40, 0.2); font-size: 12px; white-space: nowrap; }
 .tag.near b { display: block; }
 .wish.peek { box-shadow: var(--shadow), 0 0 0 2px var(--accent); }
+
+/* 旅客的卡片：青绿色的细边、头像外面一圈青绿（手机上卡片只剩头像，靠这一圈认），只有两个心愿所以只留两颗圆点 */
+.wish.guest { border-color: rgba(74, 151, 144, 0.7); }
+.wish.guest .avatar { box-shadow: 0 0 0 2px #4a9790; }
+.wish.guest .tier { color: #3f8f88; font-weight: 700; }
+.wish.guest .pips i:nth-child(n + 3), #wish-detail.guest .pips i:nth-child(n + 3) { display: none; }
 .bubble b { color: var(--accent-deep); margin-right: 6px; }
 
 /* ---------- 新手提示 ---------- */

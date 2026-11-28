@@ -10,7 +10,7 @@ import { Weather } from './weather.js';
 // 跟着季节变色的东西：换季时这些零件要重画，别的不用动
 const SEASONAL = new Set(['tree', 'garden', 'field']);
 // 会积雪、会落上树叶的东西：雪厚了一档、换了季节或换了画质时重画
-const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail', 'orchard', 'terrace', 'stilt', 'clock', 'bridge', 'library']);
+const DRESSED = new Set(['roof', 'cone', 'flat', 'tree', 'garden', 'field', 'lamp', 'well', 'pavilion', 'fountain', 'market', 'windmill', 'lighthouse', 'door', 'balcony', 'rail', 'orchard', 'terrace', 'stilt', 'clock', 'bridge', 'library', 'innroof']);
 const SEASON_KEYS = [...new Set(SEASON_COLORS.flatMap((s) => Object.keys(s)))];
 const SUMMER = Object.fromEntries(SEASON_KEYS.map((k) => [k, C[k]])); // C 里原本的颜色
 const OVERCAST = new THREE.Color('#b9c2cc'); // 下雨下雪时天色往这个灰里靠

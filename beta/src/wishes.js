@@ -88,7 +88,7 @@ const sideRoofs = (w, h) => DIRS.map((d) => w.roofOf(w.cell(h.x + d.x, h.z + d.z
 // need 和 say 的文字在 lang/ 的文字表里（c.<条件>.need / .say），用到的时候才按当前语言去取。
 // 有的居民对同一个条件有自己的说法，这时把那句话的键传进来。
 
-const cond = {
+export const cond = {
   facing: (d) => ({
     test: (w, h) => h.dir === d,
     get need() {
