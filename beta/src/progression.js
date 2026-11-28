@@ -12,12 +12,12 @@ export const LEVELS = [
   { need: 0, cap: 3, unlock: ['room', 'balcony', 'road', 'garden', 'tree'] },
   { need: 4, cap: 4, unlock: ['lamp', 'shop'] },
   { need: 8, cap: 5, unlock: ['dock', 'well', 'paint'] },
-  { need: 10, cap: 7, stage: 1, unlock: ['tower', 'field', 'bridge'] },
-  { need: 15, cap: 9, unlock: ['workshop', 'windmill', 'orchard'] },
+  { need: 12, cap: 7, stage: 1, unlock: ['tower', 'field', 'bridge'] },
+  { need: 16, cap: 9, unlock: ['workshop', 'windmill', 'orchard'] },
   { need: 20, cap: 12, stage: 2, unlock: ['greenhouse', 'pavilion', 'library'] },
-  { need: 27, cap: 14, unlock: ['market', 'fountain', 'terrace'] },
+  { need: 27, cap: 14, unlock: ['market', 'fountain'] },
   { need: 33, cap: 17, stage: 3, unlock: ['lighthouse'] },
-  { need: 41, cap: 21, unlock: ['stilt'] },
+  { need: 41, cap: 21, unlock: ['stilt', 'terrace'] },
   { need: 50, cap: 24, final: true, unlock: ['clock'] },
 ];
 export const MAX_LV = LEVELS.length - 1;
