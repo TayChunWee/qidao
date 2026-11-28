@@ -141,6 +141,7 @@ const dict = {
   'top.camRight': '向右转动镜头（E）',
   'top.help': '操作说明',
   'top.settings': '设置',
+  'top.tags': '住户标签：在每座房子上显示住的是谁',
   'set.music': '音乐',
   'set.track': '曲目',
   'set.sfx': '音效',
@@ -281,6 +282,8 @@ const dict = {
   'arrival.full': '居民都到齐了',
 
   // ---------- 提示 ----------
+  'toast.tagsOn': '住户标签：开',
+  'toast.tagsOff': '住户标签：关',
   'toast.arrive': (name) => `新居民：${name} 来到了岛上`,
   'toast.idea': (name) => `${name}有了一个新想法`,
   'toast.locked': (need, name) => `繁荣度达到 ${need} 才能解锁「${name}」`,

@@ -50,7 +50,6 @@ const FRINGE = {
 const cap = (h, fr = 'crop') => `<path d="${CAP}${FRINGE[fr]}" fill="${h}"/>${line('M12.4 14.6Q14.8 12.2 18.6 11.7', sheen(h), 1.1)}`;
 const bunShine = (h, x, y) => line(`M${x - 2.9} ${y - 1}Q${x - 1.7} ${y - 3.2} ${x + 0.7} ${y - 3.4}`, sheen(h), 1);
 const SIDES = 'M7.9 17.4L7.8 24.6Q9.6 21 11.4 17.8ZM32.1 17.4L32.2 24.6Q30.4 21 28.6 17.8Z';
-const TUFTS = (h) => `<ellipse cx="8.3" cy="21.8" rx="2.8" ry="4.5" fill="${h}"/><ellipse cx="31.7" cy="21.8" rx="2.8" ry="4.5" fill="${h}"/>`;
 
 // 头后面的头发（先画，被头挡住一部分）
 const BACK = {
@@ -60,6 +59,8 @@ const BACK = {
     `<ellipse cx="5.4" cy="24.6" rx="3.3" ry="6.6" transform="rotate(14 5.4 24.6)" fill="${h}"/>` +
     `<ellipse cx="34.6" cy="24.6" rx="3.3" ry="6.6" transform="rotate(-14 34.6 24.6)" fill="${h}"/>` +
     [7.6, 32.4].map((x) => `<path d="M${x} 18.4l-2.6-1.9v3.8zM${x} 18.4l2.6-1.9v3.8z" fill="${s.bow}"/><circle cx="${x}" cy="18.4" r=".9" fill="${dark(s.bow, 0.2)}"/>`).join(''),
+  // 秃顶的人两鬓剩下的头发：画在头的后面，只从两侧耳朵上方露出一点（画在头前面会像戴了耳罩）
+  ring: (h) => `<g fill="${h}"><circle cx="7.7" cy="18.8" r="3.1"/><circle cx="7.2" cy="22.8" r="2.9"/><circle cx="32.3" cy="18.8" r="3.1"/><circle cx="32.8" cy="22.8" r="2.9"/></g>`,
   pony: (h) => `<ellipse cx="33.6" cy="25.6" rx="3.1" ry="7.4" transform="rotate(-13 33.6 25.6)" fill="${h}"/><circle cx="32.2" cy="19.6" r="1.4" fill="${GOLD}"/>`,
 };
 
@@ -79,9 +80,9 @@ const HAIR = {
     line('M9.6 13.6Q10.6 11 13 10.4M16.6 9.4Q18 7.2 20.6 7M25.6 11.4Q27.4 10.4 29 11.4M7 19.4Q7 17.6 8.2 16.6', sheen(h), 0.9) +
     line('M12.6 19.6Q14.6 21.4 16.6 19.8M23.4 19.8Q25.4 21.4 27.4 19.6', dark(h, 0.16), 0.7),
   // 头顶光光的，只剩两鬓
-  bald: (h) => `${TUFTS(h)}<ellipse cx="15.6" cy="16.8" rx="2.6" ry="1.4" transform="rotate(-28 15.6 16.8)" fill="#fff" opacity=".4"/>`,
+  bald: () => `<ellipse cx="15.6" cy="16.8" rx="2.6" ry="1.4" transform="rotate(-28 15.6 16.8)" fill="#fff" opacity=".4"/>`,
   // 头顶挽一个小髻
-  knot: (h) => `${TUFTS(h)}<circle cx="20" cy="10.6" r="3.6" fill="${h}"/>${line('M16.8 12.9h6.4', dark(h, 0.3), 1.1)}`,
+  knot: (h) => `<circle cx="20" cy="10.6" r="3.6" fill="${h}"/>${line('M16.8 12.9h6.4', dark(h, 0.3), 1.1)}`,
   sides: (h) => `<path d="${SIDES}" fill="${h}"/>`,
 };
 
@@ -211,9 +212,10 @@ const EXTRA = {
   // 推在头顶的墨镜
   shades: () => [
     'top',
-    `<rect x="11.2" y="12.4" width="7.8" height="4.9" rx="2.3" fill="${INK}"/><rect x="21" y="12.4" width="7.8" height="4.9" rx="2.3" fill="${INK}"/>` +
-      line('M19 14.4h2', INK, 1.1) +
-      `<path d="M12.8 14.2l2-1.1M22.6 14.2l2-1.1" stroke="#fff" stroke-width=".8" stroke-linecap="round" opacity=".6"/>`,
+    // 镜框是白的：深色镜片压在深色头发上会糊成一块
+    `<g fill="#3d4663" stroke="#fff8ea" stroke-width="1.2"><rect x="11" y="12.2" width="7.8" height="5" rx="2.3"/><rect x="21.2" y="12.2" width="7.8" height="5" rx="2.3"/></g>` +
+      line('M18.8 14.2h2.4', '#fff8ea', 1.1) +
+      `<path d="M12.8 14.6l2.2-1.4M23 14.6l2.2-1.4" stroke="#fff" stroke-width=".9" stroke-linecap="round" opacity=".75"/>`,
   ],
   // 夹在耳朵上的东西：木匠的铅笔、画画的笔、写诗的羽毛
   earpencil: () => ['top', line('M31.4 16.2L33.7 25', '#f2c14e', 1.8) + line('M31.2 15.4l.3 1.2', INK, 1.8)],
@@ -265,7 +267,7 @@ const WHO = {
   xing: {},
   chao: { x: ['kerchief'] },
   nao: { hair: 'spiky', x: ['bandana', 'plaster'] },
-  song: { hair: 'bald', x: ['brows', 'stache'] },
+  song: { hair: 'bald', back: 'ring', x: ['brows', 'stache'] },
   he: { back: 'bob', x: ['earbrush'] },
   hua: { hair: 'bun', x: ['flowers'] },
   yun: { hair: 'curly' },
@@ -289,7 +291,7 @@ const WHO = {
   lan: { x: ['walrus'] },
   mei: { hair: 'bun', x: ['plum', 'earrings'] },
   zi: { hair: 'crop', fr: 'bowl', back: 'tails', bow: '#d6b4f5' },
-  wan: { hair: 'knot', x: ['longbeard', 'brows'] },
+  wan: { hair: 'knot', back: 'ring', x: ['longbeard', 'brows'] },
   xin: { x: ['letter'] },
   qiao: { x: ['braids', 'ribbon'] },
   guo: { back: 'bob', x: ['apple', 'blush'] },

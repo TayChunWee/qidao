@@ -119,6 +119,7 @@ const dict = {
   'top.camRight': 'カメラを右に回す（E）',
   'top.help': 'あそびかた',
   'top.settings': '設定',
+  'top.tags': '住人タグ：それぞれの家にだれが住んでいるかを表示',
   'set.music': '音楽',
   'set.track': '曲',
   'set.sfx': '効果音',
@@ -259,6 +260,8 @@ const dict = {
   'arrival.full': '住民が全員そろいました',
 
   // ---------- 提示 ----------
+  'toast.tagsOn': '住人タグ：オン',
+  'toast.tagsOff': '住人タグ：オフ',
   'toast.arrive': (name) => `新しい住民：${name} が島にやって来ました`,
   'toast.idea': (name) => `${name}がひらめきました`,
   'toast.locked': (need, name) => `「${name}」は繁栄度 ${need} で解放されます`,

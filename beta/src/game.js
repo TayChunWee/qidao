@@ -83,6 +83,7 @@ const TAP_SLOP = 10; // 触屏上手指挪动不超过这么多像素，还算"�
 const SETTINGS_KEY = 'qidao-settings-v1';
 const MOD = Object.fromEntries(MODULES.map((m) => [m.id, m]));
 const ARRIVE_DELAY = 8; // 所有人都住下之后，过多少秒来下一位
+const TAG_GAP = 32; // 楼上楼下两个住户标签之间至少隔多远（像素）
 const IDEA_DELAY = 45; // 居民住得满意多少秒之后，会冒出一个新想法
 const IDEA_GAP = 20; // 两个新想法之间至少隔多少秒
 // 把一个矩形和里面的点顺时针转 90°（取整的规矩和 world.rotatePairs 一样，连转四次回到原处）
@@ -152,7 +153,7 @@ export class Game {
     this.done = false;
 
     // track：背景音乐的放法（'shuffle' 随机轮播、某一首的 id、'synth' 合成音乐）；lang：没选过语言时是 null，跟着浏览器走
-    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', quality: 'auto', tutorialDone: false, growthTipDone: false };
+    this.settings = { music: 0.7, sfx: 0.8, track: 'shuffle', lang: null, fps: 144, showFps: false, theme: 'auto', hand: 'right', quality: 'auto', tags: false, tutorialDone: false, growthTipDone: false };
     try {
       Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
@@ -242,6 +243,13 @@ export class Game {
       checkImport: (text) => this.checkImport(text),
       applyImport: (text) => this.applyImport(text),
       focusResident: (id) => this.focusResident(id),
+      toggleTags: () => {
+        this.settings.tags = !this.settings.tags;
+        this.ui.setTagsOn(this.settings.tags);
+        this.audio.click();
+        this.ui.toast(t(this.settings.tags ? 'toast.tagsOn' : 'toast.tagsOff'));
+        this.saveSettings();
+      },
       hoverSound: () => this.audio.hover(),
       clickSound: () => this.audio.click(),
     });
@@ -250,6 +258,7 @@ export class Game {
     this.ui.setFpsChoice(this.settings.fps, this.settings.showFps);
     this.ui.setThemeMode(this.settings.theme);
     this.ui.setHand(this.settings.hand);
+    this.ui.setTagsOn(this.settings.tags);
     pacer.onStats = (s) => this.ui.setPerf(s);
     pacer.setCap(this.settings.fps);
     this.applyQuality();
@@ -825,15 +834,18 @@ export class Game {
       return;
     }
     if (!this.mouse || !this.mouse.inside || !this.started || this.drag) {
+      this.peek = null;
       this.setHover(null);
       return;
     }
     if (this.tool === 'move') {
+      this.peek = null;
       this.setHover(null);
       this.moveHint();
       return;
     }
     const pick = this.view.pick(this.mouse.x, this.mouse.y);
+    this.peek = pick; // 鼠标指着哪一格：那一格里住的人会亮出标签（没选工具时也一样）
     const pk = pick ? `${pick.x},${pick.z},${pick.level},${pick.face}` : '';
     if (pk !== this.pickKey) {
       this.pickKey = pk;
@@ -1229,6 +1241,64 @@ export class Game {
     res.say(r.tier >= 2 && r.bonus && !r.bonus.done ? r.bonus.say : r.text, 5);
   }
 
+  // ---------- 认房子 ----------
+
+  // 每帧：把住户标签摆到各家房子上。开关开着时全岛都显示；关着时只显示鼠标指着（触屏：瞄准或点中）的那一格里的住户
+  updateTags(dt) {
+    let peek = null;
+    if (this.started) {
+      if (this.touch) {
+        if (this.tapPeekT > 0) this.tapPeekT -= dt;
+        peek = this.tool && this.tool !== 'move' && this.aim ? this.aim : this.tapPeekT > 0 ? this.tapPeek : null;
+      } else if (this.mouse && this.mouse.inside && !this.drag) {
+        peek = this.peek;
+      }
+    }
+    const list = [];
+    const near = [];
+    const stacks = new Map(); // 同一格里住着几户（楼上楼下）："x,z" → 他们的标签
+    if (this.started) {
+      for (const r of this.results) {
+        const h = r.home;
+        if (!h) continue;
+        const on = !!peek && peek.x === h.x && peek.z === h.z;
+        if (on) near.push(r.id);
+        if (!on && !this.settings.tags) continue;
+        const p = this.view.project(this.view.cellCenter(h.x, h.z, h.level * H + H * 0.55));
+        const tag = { id: r.id, x: p.x, y: p.y, near: on, level: h.level };
+        list.push(tag);
+        const k = `${h.x},${h.z}`;
+        if (!stacks.has(k)) stacks.set(k, []);
+        stacks.get(k).push(tag);
+      }
+    }
+    // 镜头拉远时，楼上楼下的标签会叠在一起：从上往下排开，每个至少隔开一个头像的距离，整摞仍然对着这座楼的中间
+    for (const s of stacks.values()) {
+      if (s.length < 2) continue;
+      s.sort((a, b) => b.level - a.level);
+      const mid = s.reduce((sum, a) => sum + a.y, 0) / s.length;
+      for (let i = 1; i < s.length; i++) s[i].y = Math.max(s[i].y, s[i - 1].y + TAG_GAP);
+      const shift = mid - s.reduce((sum, a) => sum + a.y, 0) / s.length;
+      for (const a of s) a.y += shift;
+    }
+    this.ui.setTags(list);
+    const key = near.join();
+    if (key !== this.peekKey) {
+      this.peekKey = key;
+      this.ui.setPeek(near, this.touch && !this.tool);
+    }
+  }
+
+  // 触屏上没选工具时点一座房子：亮出住在里面的人，过几秒自己收起
+  peekAt(x, y) {
+    const pick = this.view.pick(x, y);
+    const lived = !!pick && this.results.some((r) => r.home && r.home.x === pick.x && r.home.z === pick.z);
+    this.tapPeek = lived ? pick : null;
+    this.tapPeekT = lived ? 4 : 0;
+    this.peekKey = null; // 再点同一座也要把卡片滚出来
+    if (lived) this.audio.hover();
+  }
+
   // ---------- 输入 ----------
 
   bindInput() {
@@ -1475,7 +1545,11 @@ export class Game {
 
   handleTap(x, y) {
     const tool = this.tool;
-    if (!tool || tool === 'move') return;
+    if (!tool) {
+      this.peekAt(x, y);
+      return;
+    }
+    if (tool === 'move') return;
     const pick = this.view.pick(x, y);
     if (!pick) {
       this.cancelAim();
@@ -1595,6 +1669,8 @@ export class Game {
         this.ui.setBubble(r.def.id, null);
       }
     });
+
+    this.updateTags(dt);
 
     this.ui.setCompass(this.view.az, this.view.sunTheta, this.view.isDay);
     this.clockTimer -= dt;

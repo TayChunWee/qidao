@@ -270,6 +270,7 @@ body.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .icon-btn svg, .clock-icon svg, .s-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .icon-btn:hover { background: rgba(232, 132, 107, 0.14); color: var(--accent-deep); transform: translateY(-1px); }
 .icon-btn:active { transform: scale(0.9); }
+.icon-btn.on { background: rgba(232, 132, 107, 0.2); color: var(--accent-deep); }
 
 #settings { position: absolute; right: 16px; top: 72px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; width: var(--set-w); }
 #settings[hidden] { display: none; }
@@ -485,6 +486,17 @@ body.touch #tooltip.show { transition: opacity 0.14s, transform 0.2s var(--sprin
   opacity: 0; transition: opacity 0.2s; will-change: transform; pointer-events: none;
 }
 .bubble.show { opacity: 1; }
+
+/* 房子上的住户标签：头像的圆心对准那一层楼的正中。near：鼠标指着或点中的那一户，放大并带上名字 */
+#tags { position: absolute; left: 0; top: 0; pointer-events: none; }
+.tag { position: absolute; left: -14px; top: -14px; display: flex; align-items: center; gap: 7px; opacity: 0; transition: opacity 0.18s; will-change: transform; }
+.tag.show { opacity: 1; }
+.tag.near { z-index: 1; }
+.tag .avatar { width: 28px; height: 28px; box-shadow: 0 0 0 2px rgb(var(--paper-rgb)), 0 2px 7px rgba(60, 40, 30, 0.35); }
+.tag.near .avatar { transform: scale(1.1); }
+.tag b { display: none; padding: 2px 9px; border-radius: 11px; background: rgb(var(--paper-rgb)); box-shadow: 0 3px 10px rgba(90, 60, 40, 0.2); font-size: 12px; white-space: nowrap; }
+.tag.near b { display: block; }
+.wish.peek { box-shadow: var(--shadow), 0 0 0 2px var(--accent); }
 .bubble b { color: var(--accent-deep); margin-right: 6px; }
 
 /* ---------- 新手提示 ---------- */

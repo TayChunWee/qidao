@@ -15,6 +15,7 @@ const ICON = {
   camLeft: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>'),
   camRight: svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>'),
   settings: svg('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
+  tags: svg('<path d="M3.5 11.5 12 4.5l8.5 7"/><path d="M6 9.8V19.5h12V9.8"/><circle cx="12" cy="13" r="1.9"/><path d="M8.8 19.5a3.2 3.2 0 0 1 6.4 0"/>'),
   help: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8"/><path d="M12 17v.2"/>'),
   music: svg('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
   sound: svg('<path d="M4 10v4h3l5 4V6L7 10z"/><path d="M16 9a4 4 0 0 1 0 6"/>'),
@@ -92,6 +93,8 @@ export class UI {
     this.arrival = document.createElement('div');
     this.arrival.className = 'arrival';
     this.wishBox.appendChild(this.arrival);
+    this.tagBox = $('#tags');
+    this.tagEls = new Map();
     this.hint = $('#hint');
     this.toastEl = $('#toast');
     this.tooltip = $('#tooltip');
@@ -550,6 +553,8 @@ export class UI {
     $('#cam-left').innerHTML = ICON.camLeft;
     $('#cam-right').innerHTML = ICON.camRight;
     $('#btn-help').innerHTML = ICON.help;
+    $('#btn-tags').innerHTML = ICON.tags;
+    $('#btn-tags').addEventListener('click', () => this.h.toggleTags());
     $('#btn-settings').innerHTML = ICON.settings;
     $('#ico-music').innerHTML = ICON.music;
     $('#ico-sfx').innerHTML = ICON.sound;
@@ -885,8 +890,10 @@ export class UI {
   clearResidents() {
     for (const w of this.wishEls.values()) w.el.remove();
     for (const b of this.bubbleEls.values()) b.el.remove();
+    for (const g of this.tagEls.values()) g.el.remove();
     this.wishEls.clear();
     this.bubbleEls.clear();
+    this.tagEls.clear();
     this.openWish(null);
   }
 
@@ -978,6 +985,54 @@ export class UI {
     const px = Math.min(window.innerWidth - b.w - 8, Math.max(8, x + 6));
     const py = Math.max(8, y - b.h - 6);
     b.el.style.transform = `translate(${px}px, ${py}px)`;
+  }
+
+  // ---------- 认房子 ----------
+
+  // 顶栏上"住户标签"那个开关亮不亮
+  setTagsOn(on) {
+    const b = $('#btn-tags');
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on);
+  }
+
+  // 房子上的住户标签。list：这一帧要显示的 [{ id, x, y, near }]，不在里面的收起来。
+  // 头像直接用居民卡片上现在的表情，摆放前的预览也会跟着变
+  setTags(list) {
+    if (!list.length && !this.tagsShown) return;
+    const seen = new Set();
+    for (const s of list) {
+      const w = this.wishEls.get(s.id);
+      if (!w) continue;
+      let g = this.tagEls.get(s.id);
+      if (!g) {
+        const el = document.createElement('div');
+        el.className = 'tag';
+        el.innerHTML = `<div class="avatar" style="--c:${w.spec.look.body}"></div><b></b>`;
+        this.tagBox.appendChild(el);
+        g = { el, key: '' };
+        this.tagEls.set(s.id, g);
+      }
+      const key = `${w.mood}|${w.spec.name}`;
+      if (g.key !== key) {
+        g.key = key;
+        g.el.firstChild.innerHTML = avatar(s.id, w.spec.look, w.mood);
+        g.el.lastChild.textContent = w.spec.name;
+      }
+      g.el.classList.add('show');
+      g.el.classList.toggle('near', !!s.near);
+      g.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+      seen.add(s.id);
+    }
+    for (const [id, g] of this.tagEls) if (!seen.has(id)) g.el.classList.remove('show');
+    this.tagsShown = seen.size > 0;
+  }
+
+  // 鼠标指着或点中的那座房子里住的人：他们的卡片描一圈边。reveal：顺便把第一张卡片滚到看得见的地方
+  setPeek(ids, reveal = false) {
+    for (const [id, w] of this.wishEls) w.el.classList.toggle('peek', ids.includes(id));
+    const first = reveal && this.wishEls.get(ids[0]);
+    if (first) first.el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }
 
   // ---------- 提示 ----------

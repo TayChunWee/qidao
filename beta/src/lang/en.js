@@ -145,6 +145,7 @@ const dict = {
   'top.camRight': 'Turn the camera right (E)',
   'top.help': 'How to play',
   'top.settings': 'Settings',
+  'top.tags': 'Name tags: show who lives in each home',
   'set.music': 'Music',
   'set.track': 'Track',
   'set.sfx': 'Sound',
@@ -283,6 +284,8 @@ const dict = {
   'arrival.full': 'Everyone has arrived',
 
   // ---------- toasts and hints ----------
+  'toast.tagsOn': 'Name tags on',
+  'toast.tagsOff': 'Name tags off',
   'toast.arrive': (name) => `New resident: ${name} has come to the island`,
   'toast.idea': (name) => `${name} has a new idea`,
   'toast.locked': (need, name) => `${name} unlocks at prosperity ${need}`,
