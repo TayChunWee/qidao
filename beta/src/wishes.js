@@ -764,7 +764,7 @@ export const ARCHETYPES = {
     recipe: (x, z) => [[['room', x, z]], ...around(x, z, (mx, mz) => [['room', x, z], ['windmill', mx, mz]])],
   },
   su: {
-    look: { body: '#f3d9c0', hair: '#7a4a34', hat: 'cap', tint: '#f6f1e6' },
+    look: { body: '#f3d9c0', hair: '#7a4a34', hat: 'toque', tint: '#f6f1e6' },
     home: 'overShop',
     loud: true,
     needs: ['shop', 'windmill', 'well'],

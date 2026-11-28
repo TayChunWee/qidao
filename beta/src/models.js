@@ -1183,6 +1183,10 @@ export function buildResident(def) {
   } else if (def.hat === 'cap') {
     g.cyl(0.088, 0.092, 0.045, 10, 0, 0.32, 0, def.tint || C.metal);
     g.box(0.12, 0.012, 0.07, 0, 0.32, 0.09, def.tint || C.metal);
+  } else if (def.hat === 'toque') {
+    // 面包师的高帽
+    g.cyl(0.085, 0.08, 0.07, 10, 0, 0.325, 0, def.tint);
+    g.ball(0.095, 0, 0.42, 0, def.tint, 1);
   } else if (def.hat === 'beret') {
     g.ball(0.088, 0, 0.3, -0.02, def.hair, 1);
     g.cyl(0.1, 0.08, 0.035, 10, 0.02, 0.345, 0, def.tint || '#c0504a');
