@@ -378,7 +378,7 @@ export class Game {
       const first = !this.seasonKey;
       this.seasonKey = key;
       this.view.setSeason((s + 3) % 4, s, step / TURN_STEPS);
-      if (!first) this.view.sync(this.world, this.ctx(), 'instant');
+      if (!first) this.view.sync(this.world, this.ctx(), 'season');
       if (s !== this.season) {
         this.season = s;
         this.ui.setSeason(s);
@@ -393,6 +393,7 @@ export class Game {
     if (wkey !== this.wxKey) {
       this.wxKey = wkey;
       this.view.setWeather(wet && s !== 3, wet && s === 3 ? 'snow' : s === 2 ? 'leaf' : s === 0 ? 'petal' : null, wet);
+      this.audio.setRain(wet && s !== 3); // 下雪没有声音
     }
   }
 
@@ -1333,9 +1334,11 @@ export class Game {
       // 在输入框里打字的时候，不当成游戏的快捷键
       if (!this.started || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const k = e.key.toLowerCase();
-      // 数字键选的是当前这一页里的模块
-      const mod = MODULES.find((m) => m.tab === this.tab && m.key === k);
-      if (mod && !e.ctrlKey && !e.metaKey) {
+      // 数字键选的是当前这一页里的模块：1 到 9 是前九个，按住 Shift 再按数字是第十个往后的
+      const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code || '');
+      const slot = digit ? Number(digit[1]) - 1 + (e.shiftKey ? 9 : 0) : -1;
+      const mod = slot >= 0 ? MODULES.find((m) => m.tab === this.tab && m.slot === slot) : null;
+      if (mod && !e.ctrlKey && !e.metaKey && !e.altKey) {
         this.selectTool(mod.id);
       } else if (k === 'tab') {
         const i = TABS.findIndex((tab) => tab.id === this.tab);

@@ -1121,11 +1121,19 @@ export function buildPart(kind, p = {}) {
         // 塔身的窄窗
         g.add(new THREE.BoxGeometry(0.12, 0.26, 0.02), C.frame, ex * 0.28, 0.98, ez * 0.28, r);
         glow.add(new THREE.BoxGeometry(0.075, 0.21, 0.03), '#fff', ex * 0.28, 0.98, ez * 0.28, r);
-        // 四面的钟：金边、亮着的钟面、十点十分的两根针
+        // 四面的钟：金边、亮着的钟面、两根会走的针
         g.add(new THREE.CylinderGeometry(0.185, 0.185, 0.02, 16), C.spark, ex * 0.3, 1.57, ez * 0.3, r, Math.PI / 2);
         glow.add(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 16), '#fff', ex * 0.302, 1.57, ez * 0.302, r, Math.PI / 2);
-        g.add(new THREE.BoxGeometry(0.022, 0.085, 0.012).translate(0, 0.036, 0), C.metal, ex * 0.322, 1.57, ez * 0.322, r, 0, 1.05);
-        g.add(new THREE.BoxGeometry(0.016, 0.13, 0.012).translate(0, 0.058, 0), C.metal, ex * 0.322, 1.57, ez * 0.322, r, 0, -1.05);
+        // 两根针各是一个小网格，跟着游戏里的时间走（view.js 每帧转它）。先摆在十点十分：工具栏的小图和摆放预览就是这个样子
+        for (const [kind, w, len, at] of [['h', 0.022, 0.085, 5.3233], ['m', 0.016, 0.13, 1.0472]]) {
+          const hg = new Geo();
+          hg.add(new THREE.BoxGeometry(w, len, 0.012).translate(0, len * 0.43, 0), C.metal);
+          const hand = new THREE.Mesh(hg.build(), mats.solid);
+          hand.position.set(ex * 0.322, 1.57, ez * 0.322);
+          hand.rotation.set(0, r, -at);
+          hand.userData.hand = kind;
+          extras.push(hand);
+        }
         g.add(new THREE.BoxGeometry(0.03, 0.03, 0.016), C.metal, ex * 0.322, 1.57, ez * 0.322, r);
       }
       g.cone(0.48, 0.44, 4, 0, 1.82, 0, C.slate, Math.PI / 4);
